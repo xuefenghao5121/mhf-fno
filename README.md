@@ -6,7 +6,17 @@
 
 This project implements a **Multi-Head Fourier (MHF)** module based on the TransFourier paper, designed as a drop-in replacement for standard SpectralConv in NeuralOperator's FNO.
 
-### Key Results on Darcy Flow
+### Key Results on Darcy Flow (NeuralOperator Official Benchmark)
+
+#### 2D Darcy Flow (32x32 resolution)
+
+| Metric | FNO (Official) | MHF-FNO | Improvement |
+|--------|----------------|---------|-------------|
+| Parameters | 133,873 | 24,769 | **-81.5%** |
+| L2 Error | 0.3090 | 0.3077 | **-0.41%** |
+| Training Time | 154.75s | 39.46s | **-74.5%** |
+
+#### 1D Darcy Flow (64 resolution)
 
 | Metric | Standard FNO | MHF-FNO | Improvement |
 |--------|-------------|---------|-------------|
