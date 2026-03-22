@@ -11,86 +11,246 @@
 | FNO-32 | 133,873 | 0.0961 | 基准 |
 | **MHF-FNO (1+3层)** | **72,433** | **0.0919** | **-46%参数, -4.4%误差** ✅ |
 
-### 关键发现
+---
 
-1. **最佳配置**: 第1层和第3层使用 MHF，中间层保留标准 SpectralConv
-2. **参数效率**: 参数减少 46%，精度反而提升 4.4%
-3. **稳定性**: 方差减少 60%，训练更稳定
-4. **商用就绪**: 基于 NeuralOperator 2.0.0 官方框架
+## 🚀 安装
 
-## 🚀 快速开始
-
-### 安装
+### 方法 1: 从 GitHub 安装 (推荐)
 
 ```bash
-pip install neuraloperator torch
+pip install git+https://github.com/xuefenghao5121/mhf-fno.git
 ```
 
-### 基础使用
+### 方法 2: 手动安装
+
+```bash
+# 克隆仓库
+git clone https://github.com/xuefenghao5121/mhf-fno.git
+cd mhf-fno
+
+# 安装
+pip install -e .
+```
+
+### 依赖
+
+```bash
+pip install torch neuraloperator>=2.0.0
+```
+
+---
+
+## 📚 NeuralOperator 集成指南
+
+### 方法 1: 使用预设的最佳配置 (推荐)
 
 ```python
-from neuralop.models import FNO
-from mhf_fno import create_mhf_fno
+from mhf_fno import MHFFNO
 
-# 创建 MHF-FNO 模型 (最佳配置)
-model = create_mhf_fno(
+# 一行创建最佳配置的模型
+model = MHFFNO.best_config()
+
+# 自定义参数
+model = MHFFNO.best_config(
+    n_modes=(16, 16),      # 更高分辨率
+    hidden_channels=64,     # 更大模型
+    in_channels=3,          # 多通道输入
+    out_channels=1          # 输出通道
+)
+```
+
+### 方法 2: 混合层配置
+
+```python
+from mhf_fno import create_hybrid_fno
+
+# 指定哪些层使用 MHF
+model = create_hybrid_fno(
     n_modes=(8, 8),
     hidden_channels=32,
     n_layers=3,
     mhf_layers=[0, 2],  # 第1和第3层使用 MHF
     n_heads=4
 )
-
-# 或使用预设的最佳配置
-from mhf_fno import MHFFNO
-model = MHFFNO.best_config()
 ```
 
-### 作为 NeuralOperator 插件使用
+### 方法 3: 作为 FNO 的 conv_module 使用
 
 ```python
 from neuralop.models import FNO
-from neuralop.training import Trainer
 from mhf_fno import MHFSpectralConv
-
-# 方法1: 使用 conv_module 参数
 from functools import partial
+
+# 创建 MHF 卷积层工厂
 MHFConv = partial(MHFSpectralConv, n_heads=4)
 
+# 全部层使用 MHF
 model = FNO(
     n_modes=(8, 8),
     hidden_channels=32,
+    in_channels=1,
+    out_channels=1,
     n_layers=3,
-    conv_module=MHFConv  # 全部层使用 MHF
+    conv_module=MHFConv  # 替换所有 SpectralConv
+)
+```
+
+---
+
+## 🔥 完整训练示例
+
+### 基础训练
+
+```python
+import torch
+from torch.utils.data import DataLoader
+from mhf_fno import MHFFNO
+
+# 1. 创建模型
+model = MHFFNO.best_config()
+
+# 2. 准备数据
+train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+test_loader = DataLoader(test_dataset, batch_size=32)
+
+# 3. 定义损失和优化器
+from neuralop.losses.data_losses import LpLoss
+loss_fn = LpLoss(d=2, p=2, reduction='mean')
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=100)
+
+# 4. 训练循环
+for epoch in range(100):
+    model.train()
+    for batch in train_loader:
+        x, y = batch['x'], batch['y']
+        
+        optimizer.zero_grad()
+        pred = model(x)
+        loss = loss_fn(pred, y)
+        loss.backward()
+        optimizer.step()
+    
+    scheduler.step()
+    
+    # 评估
+    model.eval()
+    with torch.no_grad():
+        total_loss = 0
+        for batch in test_loader:
+            x, y = batch['x'], batch['y']
+            pred = model(x)
+            total_loss += loss_fn(pred, y).item()
+        print(f"Epoch {epoch}: Test Loss = {total_loss / len(test_loader):.4f}")
+```
+
+### 使用 NeuralOperator 官方 Trainer
+
+```python
+from neuralop.training import Trainer
+from neuralop.losses.data_losses import LpLoss
+from mhf_fno import MHFFNO
+
+# 创建模型
+model = MHFFNO.best_config()
+
+# 使用官方 Trainer
+trainer = Trainer(
+    model=model,
+    n_epochs=100,
+    learning_rate=1e-3,
+    training_loss=LpLoss(d=2, p=2),
+    eval_losses={'h1': LpLoss(d=2, p=2)},
 )
 
-# 方法2: 混合配置 (推荐)
-from mhf_fno import create_hybrid_fno
+# 开始训练
+trainer.train(
+    train_loader=train_loader,
+    test_loaders={'test': test_loader},
+)
+```
 
+### 使用官方 Darcy Flow 数据集
+
+```python
+from neuralop.data.datasets import load_darcy_flow_small
+from mhf_fno import MHFFNO
+
+# 加载官方数据集 (支持 16x16 和 32x32)
+train_loader, test_loaders, data_processor = load_darcy_flow_small(
+    n_train=1000,
+    n_tests=[100, 100],
+    batch_size=32,
+    test_batch_sizes=[32, 32],
+    test_resolutions=[16, 32]
+)
+
+# 创建模型
+model = MHFFNO.best_config()
+
+# 训练...
+```
+
+---
+
+## 🎯 不同场景的配置建议
+
+### 场景 1: 追求最高精度
+
+```python
+# 使用更大的 hidden_channels，保持混合配置
+model = create_hybrid_fno(
+    n_modes=(16, 16),
+    hidden_channels=64,     # 更大模型
+    n_layers=4,
+    mhf_layers=[0, 2, 3],   # 更多层使用 MHF
+    n_heads=8               # 更多头
+)
+```
+
+### 场景 2: 追求最小参数量
+
+```python
+# 全部层使用 MHF
 model = create_hybrid_fno(
     n_modes=(8, 8),
     hidden_channels=32,
     n_layers=3,
-    mhf_layers=[0, 2],  # 指定哪些层使用 MHF
-    n_heads=4
+    mhf_layers=[0, 1, 2],   # 全部使用 MHF
+    n_heads=8               # 更多头 = 更少参数
 )
 ```
 
-## 📁 项目结构
+### 场景 3: 平衡性能与精度 (推荐)
 
+```python
+# 最佳配置：第1+3层使用 MHF
+model = MHFFNO.best_config()
 ```
-mhf_fno_plugin/
-├── README.md           # 本文档
-├── mhf_fno.py          # 核心实现
-├── examples/
-│   ├── basic_usage.py       # 基础使用示例
-│   ├── darcy_benchmark.py   # Darcy Flow benchmark
-│   └── custom_layers.py     # 自定义层配置
-├── tests/
-│   └── test_mhf_fno.py      # 单元测试
-└── docs/
-    └── TECHNICAL.md         # 技术文档
-```
+
+---
+
+## 📊 详细测试结果
+
+### 不同层配置对比
+
+| 配置 | 参数量 | L2误差 | vs FNO-32 |
+|------|--------|--------|-----------|
+| FNO-32 | 133,873 | 0.0961 | 基准 |
+| 第1层用MHF | 103,153 | 0.0939 | -23%, -2.7% |
+| 第3层用MHF | 103,153 | 0.0951 | -23%, -1.5% |
+| **第1+3层用MHF** | **72,433** | **0.0919** | **-46%, -4.4%** ✅ |
+| 第2+3层用MHF | 72,433 | 0.0966 | -46%, +0.0% |
+| 全部用MHF | 41,713 | 0.1266 | -69%, +31% |
+
+### 运行稳定性 (3次运行)
+
+| 模型 | 平均误差 | 标准差 |
+|------|----------|--------|
+| FNO-32 | 0.0961 | ±0.0028 |
+| MHF-FNO | 0.0919 | ±0.0011 |
+
+---
 
 ## 🔬 理论背景
 
@@ -110,10 +270,6 @@ mhf_fno_plugin/
 参数量: (in_channels × out_channels × n_modes) / n_heads
 ```
 
-### 核心思想
-
-通过将通道分成多个"头"来减少参数量，同时保持学习多样化频率模式的能力。
-
 ### 为什么混合配置更好？
 
 | 层 | 作用 | 推荐 |
@@ -124,27 +280,7 @@ mhf_fno_plugin/
 
 **原因**: 边缘层对参数敏感，MHF 的隐式正则化效果更好。
 
-## 📊 详细测试结果
-
-### Darcy Flow 16×16 (1000训练, 50测试)
-
-| 配置 | 参数量 | L2误差 | vs FNO-32 |
-|------|--------|--------|-----------|
-| FNO-32 | 133,873 | 0.0961 | 基准 |
-| 第1层用MHF | 103,153 | 0.0939 | -23%, -2.7% |
-| 第3层用MHF | 103,153 | 0.0951 | -23%, -1.5% |
-| **第1+3层用MHF** | **72,433** | **0.0919** | **-46%, -4.4%** ✅ |
-| 第2+3层用MHF | 72,433 | 0.0966 | -46%, +0.0% |
-| 全部用MHF | 41,713 | 0.1266 | -69%, +31% |
-
-### 运行稳定性 (3次运行)
-
-| 模型 | 平均误差 | 标准差 |
-|------|----------|--------|
-| FNO-32 | 0.0961 | ±0.0028 |
-| MHF-FNO | 0.0919 | ±0.0011 |
-
-**MHF-FNO 方差减少 60%，训练更稳定。**
+---
 
 ## 🔧 API 参考
 
@@ -153,12 +289,12 @@ mhf_fno_plugin/
 ```python
 class MHFSpectralConv(SpectralConv):
     """
-    多头频谱卷积层
+    多头频谱卷积层，完全兼容 NeuralOperator API
     
     参数:
         in_channels: 输入通道数
         out_channels: 输出通道数
-        n_modes: 频率模式数 (tuple for 2D)
+        n_modes: 频率模式数 (tuple for 2D, int for 1D)
         n_heads: 头数 (默认 4)
         bias: 是否使用偏置
     """
@@ -176,18 +312,7 @@ def create_hybrid_fno(
     mhf_layers: List[int] = [0, 2],
     n_heads: int = 4
 ) -> FNO:
-    """
-    创建混合 FNO 模型
-    
-    参数:
-        n_modes: 频率模式数
-        hidden_channels: 隐藏通道数
-        mhf_layers: 哪些层使用 MHF (0-indexed)
-        n_heads: MHF 头数
-    
-    返回:
-        配置好的 FNO 模型
-    """
+    """创建混合 FNO 模型"""
 ```
 
 ### MHFFNO 预设配置
@@ -195,27 +320,15 @@ def create_hybrid_fno(
 ```python
 class MHFFNO:
     @staticmethod
-    def best_config():
-        """返回最佳配置的模型"""
-        return create_hybrid_fno(
-            n_modes=(8, 8),
-            hidden_channels=32,
-            n_layers=3,
-            mhf_layers=[0, 2],
-            n_heads=4
-        )
+    def best_config(n_modes=(8, 8), hidden_channels=32, ...):
+        """最佳配置: 第1+3层使用 MHF"""
     
     @staticmethod
-    def full_mhf():
-        """全部层使用 MHF"""
-        return create_hybrid_fno(
-            n_modes=(8, 8),
-            hidden_channels=32,
-            n_layers=3,
-            mhf_layers=[0, 1, 2],
-            n_heads=4
-        )
+    def full_mhf(n_modes=(8, 8), hidden_channels=32, ...):
+        """全部层使用 MHF (不推荐)"""
 ```
+
+---
 
 ## 📝 引用
 
