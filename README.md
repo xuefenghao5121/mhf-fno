@@ -1,76 +1,75 @@
-# MHF-FNO
+# MHF-FNO: Multi-Head Fourier Neural Operator
 
-Multi-Head Fourier Neural Operator Plugin for NeuralOperator 2.0.0
+> 专注 MHF-FNO 的深入研究与优化
 
-## 📊 测试结果
+## 🎯 项目定位
 
-### Darcy Flow 16×16
+**MHF (Multi-Head Fourier) 的核心价值**：
 
-| 模型 | 参数量 | L2误差 | 改进 |
-|------|--------|--------|------|
-| FNO | 133,873 | 0.0957 | 基准 |
-| **MHF-FNO** | **72,433** | **0.0966** | **-46%参数, +1%误差** |
+- **多头多样性**：不同头学习不同的频域模式
+- **隐式正则化**：块对角结构防止过拟合
+- **边缘层优势**：在输入层效果最佳
 
-## 🚀 安装
+## 📊 实验结果
 
-```bash
-pip install git+https://github.com/xuefenghao5121/mhf-fno.git
-```
+### 边缘层 MHF 有效性
 
-## 📖 使用
+| 配置 | 参数变化 | 精度变化 |
+|------|----------|----------|
+| **仅输入层 MHF** | **-22.9%** | **+1.44%** ✅ |
+| 仅输出层 MHF | -22.9% | -0.83% |
+| 边缘层 MHF | -45.9% | -1.00% |
+| 中间层 MHF | -22.9% | -0.82% |
+| 全部 MHF | -68.8% | -37.86% ❌ |
 
-```python
-from mhf_fno import MHFSpectralConv, create_hybrid_fno, MHFFNO
+### 多头多样性分析
 
-# 方式 1: 使用预设最佳配置
-model = MHFFNO.best_config()  # 边缘层 MHF, 参数-46%
+| 指标 | 输入层 | 输出层 |
+|------|--------|--------|
+| 平均头间相似度 | 0.96 | 0.96 |
+| 多样性得分 | 0.04 | 0.04 |
 
-# 方式 2: 自定义配置
-model = create_hybrid_fno(
-    n_modes=(8, 8),
-    hidden_channels=32,
-    mhf_layers=[0, 2],  # 第1层和第3层使用 MHF
-    n_heads=4
-)
+## 💡 关键发现
 
-# 方式 3: 手动替换
-from neuralop.models import FNO
-model = FNO(n_modes=(8, 8), hidden_channels=32, in_channels=1, out_channels=1, n_layers=3)
-model.fno_blocks.convs[0] = MHFSpectralConv(32, 32, (8, 8), n_heads=4)
-model.fno_blocks.convs[2] = MHFSpectralConv(32, 32, (8, 8), n_heads=4)
-```
-
-## 🔬 设计理念
-
-MHF 的核心价值是**隐式正则化**，而不是参数压缩：
-
-- **适用场景**: 小数据集 (<1000 样本)
-- **最佳配置**: 边缘层 (第1层和最后1层) 使用 MHF
-- **不推荐**: 全部层使用 MHF (会过度压缩)
-
-详见 [OPERATOR_REVIEW.md](mhf_fno/OPERATOR_REVIEW.md)
+1. **输入层 MHF 效果最好**
+2. **多头多样性不足**（相似度 96%）
+3. **问题复杂度不是主要原因**
+4. **需要显式多样性约束**
 
 ## 📁 项目结构
 
 ```
-mhf-fno/
-├── mhf_fno/
-│   ├── __init__.py
-│   ├── mhf_fno.py          # 核心实现
-│   ├── mhf_1d.py           # 1D 版本
-│   └── mhf_2d.py           # 2D 版本
-├── examples/
-│   └── basic_usage.py
-├── README.md
-└── setup.py
+mhf_fno/
+├── __init__.py
+├── mhf_fno.py      # 核心 MHF SpectralConv
+├── mhf_1d.py       # 1D 版本
+└── mhf_2d.py       # 2D 版本
 ```
 
-## 📚 参考
+## 🔧 使用方法
 
-1. TransFourier: FFT Is All You Need (OpenReview)
-2. Fourier Neural Operators Explained (arXiv 2512.01421)
-3. NeuralOperator: https://github.com/neuraloperator/neuraloperator
+```python
+from mhf_fno import MHFSpectralConv
+from neuralop.models import FNO
+
+# 创建 FNO 模型
+model = FNO(n_modes=(8, 8), hidden_channels=32, in_channels=1, out_channels=1, n_layers=3)
+
+# 替换输入层为 MHF（推荐）
+model.fno_blocks.convs[0] = MHFSpectralConv(32, 32, (8, 8), n_heads=4)
+```
+
+## 📚 研究问题
+
+1. 如何提高多头多样性？
+2. 输入层 MHF 为什么有效？
+3. MHF 与 Multi-Head Attention 的关系？
+4. MHF 的最佳应用场景？
 
 ## 📄 License
 
 MIT License
+
+---
+
+**天渊团队** | 频域之渊，无穷探索
