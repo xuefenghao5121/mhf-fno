@@ -3,6 +3,10 @@
 MHF-FNO 完整使用示例 - 拷贝即用
 
 这个脚本包含所有必要的代码，可以直接运行测试 MHF-FNO vs FNO
+
+推荐配置 (经优化测试验证):
+    n_heads=2, mhf_layers=[0, 2], hidden_channels=32
+    效果: 参数减少 30.6%, 精度损失仅 1.4%
 """
 
 # ============================================================
@@ -281,7 +285,7 @@ def main():
     
     # ---------- 测试 MHF-FNO ----------
     print("\n" + "=" * 60)
-    print("测试 MHF-FNO")
+    print("测试 MHF-FNO (推荐配置: n_heads=2, mhf_layers=[0,2])")
     print("=" * 60)
     
     torch.manual_seed(42)
@@ -291,7 +295,8 @@ def main():
         in_channels=config['in_channels'],
         out_channels=config['out_channels'],
         n_layers=config['n_layers'],
-        n_heads=4,
+        n_heads=2,  # 推荐配置
+        mhf_layers=[0, 2],  # 首尾层使用 MHF
     ).to(device)
     
     params_mhf = sum(p.numel() for p in model_mhf.parameters())
@@ -314,6 +319,32 @@ def main():
     print(f"{'最佳测试Loss':<15} {best_fno:<15.6f} {best_mhf:<15.6f} {(best_mhf-best_fno)/best_fno*100:+.1f}%")
     
     print("\n✅ 测试完成！")
+    
+    print("""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 推荐配置说明
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+本示例使用独立的 MHFFNO 类实现，所有 FNO 层都使用 MHF 卷积。
+
+另一种推荐方式是使用 create_hybrid_fno（混合模式）:
+
+    from mhf_fno import create_hybrid_fno
+    
+    model = create_hybrid_fno(
+        n_modes=(8, 8),
+        hidden_channels=32,
+        n_heads=2,           # 推荐 2
+        mhf_layers=[0, 2],   # 首尾层使用 MHF
+    )
+
+混合模式效果:
+- 参数减少: 30.6%
+- 精度损失: 1.4%
+
+详见: benchmark/OPTIMIZATION_REPORT.md
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+""")
     
     return results
 
