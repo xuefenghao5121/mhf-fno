@@ -2,7 +2,31 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**拷贝即用** 的 MHF-FNO 实现，在标准 FNO 基础上减少 **31% 参数**，在 Darcy Flow 2D 上精度提升 **30%**。
+**专注 Darcy Flow 2D** 的 MHF-FNO 实现，在标准 FNO 基础上减少 **31% 参数**，精度提升 **30%**。
+
+---
+
+## 🎯 适用场景
+
+MHF-FNO 特别适合以下 PDE 类型：
+
+| PDE 类型 | 特征 | MHF 效果 |
+|----------|------|----------|
+| **Darcy Flow 2D** ✅ | 椭圆型、扩散主导、平滑解 | **最佳** |
+| Burgers 1D | 双曲型、对流主导 | 一般 |
+| Navier-Stokes 2D | 混合型、湍流多尺度 | 不推荐 |
+
+**推荐**: Darcy Flow、热传导、扩散方程等椭圆型 PDE
+
+---
+
+## 📊 Darcy Flow 2D 测试结果
+
+| 指标 | FNO | MHF-FNO | 变化 |
+|------|-----|---------|------|
+| 参数量 | 133,873 | 92,913 | **-30.6%** ✅ |
+| L2 Loss | 0.000074 | 0.000051 | **-30.2%** ✅ |
+| 训练时间 | 52s | 50s | -4% |
 
 ---
 
@@ -10,35 +34,17 @@
 
 ```bash
 # 安装依赖
-pip install neuralop torch numpy
+pip install neuralop>=2.0.0 torch numpy
 
 # 克隆仓库
 git clone https://github.com/xuefenghao5121/mhf-fno.git
 cd mhf-fno
 
-# 运行示例
-python examples/example.py
+# 生成 Darcy 数据并测试
+cd benchmark
+python generate_data.py --dataset darcy --n_train 500 --n_test 100
+python run_benchmarks.py --dataset darcy
 ```
-
----
-
-## 📊 测试结果
-
-### 多数据集对比
-
-| 数据集 | FNO参数 | MHF参数 | 参数变化 | FNO Loss | MHF Loss | Loss变化 |
-|--------|---------|---------|----------|----------|----------|----------|
-| **Darcy 2D** | 133,873 | 92,913 | **-30.6%** | 0.000074 | 0.000051 | **-30.2%** ✅ |
-| Burgers 1D | 26,289 | 24,241 | -7.8% | 0.002335 | 0.002586 | +10.7% |
-| Navier-Stokes 2D | 133,873 | 92,913 | -30.6% | 0.000298 | 0.000657 | +120% |
-
-### Darcy Flow 2D (推荐场景)
-
-| 指标 | FNO | MHF-FNO | 变化 |
-|------|-----|---------|------|
-| 参数量 | 133,873 | 92,913 | **-30.6%** ✅ |
-| L2 Loss | 0.000074 | 0.000051 | **-30.2%** ✅ |
-| 训练时间 | 52s | 50s | -4% |
 
 ---
 
