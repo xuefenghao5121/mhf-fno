@@ -12,85 +12,76 @@
 |--------|--------|--------|--------|------|
 | **Darcy Flow 16** | 16×16 | 1,000 | 50 | NeuralOperator 内置 |
 
-### 需下载数据
+### PDEBench H5 数据（需下载）
 
 | 数据集 | 分辨率 | 训练集 | 测试集 | 大小 |
 |--------|--------|--------|--------|------|
-| Burgers | 128 | 1,000 | 200 | ~100MB |
-| Navier-Stokes | 64×64 | 1,000 | 200 | ~1.5GB |
+| Darcy Flow 2D | 421×421 | 5,000 | 500 | ~500MB |
+| Navier-Stokes 2D | 128×128 | 10,000 | 1,000 | ~2GB |
+| Burgers 1D | 1024 | 1,000 | 200 | ~50MB |
 
 ---
 
-## 数据下载方式
+## 数据下载地址
 
-### 方式 1：自动下载（推荐）
+### PDEBench (H5 格式)
 
-运行测试脚本时会自动下载数据到 `~/.neuralop/data/`：
+官方主页: https://pdebench.github.io/
 
+直接下载:
 ```bash
-python run_benchmarks.py --dataset darcy    # Darcy 内置，无需下载
-python run_benchmarks.py --dataset burgers   # 自动下载 Burgers
+# Darcy Flow 2D
+wget -O data/2D_DarcyFlow_Train.h5 https://darus.uni-stuttgart.de/api/access/datafile/152002
+wget -O data/2D_DarcyFlow_Test.h5 https://darus.uni-stuttgart.de/api/access/datafile/152003
+
+# Navier-Stokes 2D
+wget -O data/2D_NS_Train.h5 https://darus.uni-stuttgart.de/api/access/datafile/151996
+wget -O data/2D_NS_Test.h5 https://darus.uni-stuttgart.de/api/access/datafile/151997
+
+# Burgers 1D
+wget -O data/1D_Burgers.h5 https://darus.uni-stuttgart.de/api/access/datafile/151990
 ```
 
-### 方式 2：手动下载
+### NeuralOperator (PT 格式)
 
-如果自动下载失败，可手动下载：
-
-**Burgers Equation**:
-```
-下载地址: https://zenodo.org/records/10994462/files/burgers_data.pt
-存放位置: ~/.neuralop/data/burgers_data.pt
-```
-
-**Navier-Stokes**:
-```
-下载地址: https://zenodo.org/records/10994462/files/ns_data.pt
-存放位置: ~/.neuralop/data/ns_data.pt
-```
-
-**Zenodo 数据集主页**:
-- https://zenodo.org/records/10994462
+自动下载，无需手动操作。
 
 ---
 
 ## 运行测试
 
-### 快速示例（无需下载）
+### PT 格式（默认）
 
 ```bash
-# 使用合成数据，测试 FNO vs MHF-FNO
-python example.py
-```
+cd benchmark
 
-**预期输出**:
-```
-使用设备: cpu
-生成数据: 训练 500, 测试 100, 分辨率 16x16
-✅ 数据生成完成
-
-============================================================
-结果对比
-============================================================
-指标              FNO             MHF-FNO         变化            
-------------------------------------------------------------
-参数量              133,873         108,772         -18.7%
-最佳测试Loss        0.0945          0.1060          +12.2%
-
-✅ 测试完成！
-```
-
-### 完整基准测试
-
-```bash
 # Darcy Flow (内置数据)
 python run_benchmarks.py --dataset darcy
 
-# Burgers (需下载)
+# Burgers (自动下载)
 python run_benchmarks.py --dataset burgers
+```
 
-# 自定义参数
+### H5 格式（PDEBench）
+
+```bash
+cd benchmark
+
+# 先下载数据
+wget -O ../data/2D_DarcyFlow_Train.h5 https://darus.uni-stuttgart.de/api/access/datafile/152002
+
+# 运行测试
+python run_benchmarks.py --dataset darcy --format h5 \
+    --data_path ../data/2D_DarcyFlow_Train.h5
+```
+
+### 自定义参数
+
+```bash
 python run_benchmarks.py \
     --dataset darcy \
+    --format h5 \
+    --data_path ../data/2D_DarcyFlow_Train.h5 \
     --n_train 500 \
     --n_test 100 \
     --epochs 30
@@ -98,14 +89,18 @@ python run_benchmarks.py \
 
 ---
 
-## NeuralOperator 2.0.0 兼容性
+## 参数说明
 
-本脚本已适配 NeuralOperator 2.0.0 API：
-
-| 旧参数 | 新参数 (2.0.0) |
-|--------|----------------|
-| `n_test` | `n_tests` (列表) |
-| `test_batch_size` | `test_batch_sizes` (列表) |
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--dataset` | darcy | 数据集 (darcy/burgers/navier_stokes/all) |
+| `--format` | pt | 数据格式 (pt/h5) |
+| `--data_path` | None | H5 文件路径 (format=h5 时需要) |
+| `--n_train` | 1000 | 训练集大小 |
+| `--n_test` | 200 | 测试集大小 |
+| `--epochs` | 50 | 训练轮数 |
+| `--batch_size` | 32 | 批次大小 |
+| `--output` | benchmark_results.json | 结果文件 |
 
 ---
 
@@ -123,16 +118,16 @@ python run_benchmarks.py \
 
 ## 常见问题
 
-### Q: 数据下载太慢？
+### Q: H5 数据下载太慢？
 A: 
 - 使用代理
-- 或手动下载到 `~/.neuralop/data/`
-- 或只运行 `example.py`（使用合成数据）
+- 或使用镜像站点
+- 或只运行 PT 格式（内置数据）
 
 ### Q: NeuralOperator 报错？
-A: 确保版本为 2.0.0：
+A: 确保版本正确：
 ```bash
-pip install neuralop==0.3.0
+pip install neuralop==0.3.0 h5py
 ```
 
 ### Q: GPU 内存不足？

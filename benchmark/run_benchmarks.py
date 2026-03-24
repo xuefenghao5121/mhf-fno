@@ -2,16 +2,18 @@
 """
 MHF-FNO 多数据集基准测试
 
-测试 MHF-FNO 在多个商用 benchmark 上的表现
+支持多种数据格式:
+- PT 格式 (NeuralOperator 内置)
+- H5 格式 (PDEBench 数据集)
 
 使用方法:
     python run_benchmarks.py --dataset darcy
+    python run_benchmarks.py --dataset darcy --format h5 --data_path ./data/2D_DarcyFlow_Train.h5
     python run_benchmarks.py --dataset burgers
-    python run_benchmarks.py --dataset navier_stokes
     python run_benchmarks.py --dataset all
 
 依赖:
-    pip install neuralop torch numpy
+    pip install neuralop torch numpy h5py
 """
 
 import argparse
@@ -25,6 +27,13 @@ import torch
 import torch.nn as nn
 from neuralop.losses.data_losses import LpLoss
 from neuralop.models import FNO
+
+# H5 支持
+try:
+    import h5py
+    HAS_H5PY = True
+except ImportError:
+    HAS_H5PY = False
 
 
 # ============================================================================
@@ -158,9 +167,136 @@ class MHFFNO(nn.Module):
 # 数据集加载
 # ============================================================================
 
-def load_darcy_flow(n_train=1000, n_test=200, resolution=16):
+# PDEBench 数据集下载地址
+DATASET_URLS = {
+    "darcy_2d": {
+        "train": "https://darus.uni-stuttgart.de/api/access/datafile/152002",
+        "test": "https://darus.uni-stuttgart.de/api/access/datafile/152003",
+    },
+    "navier_stokes_2d": {
+        "train": "https://darus.uni-stuttgart.de/api/access/datafile/151996",
+        "test": "https://darus.uni-stuttgart.de/api/access/datafile/151997",
+    },
+    "burgers_1d": {
+        "data": "https://darus.uni-stuttgart.de/api/access/datafile/151990",
+    },
+}
+
+
+def load_h5_darcy(h5_path, n_train=1000, n_test=200, resolution=None):
+    """从 H5 文件加载 Darcy Flow 数据"""
+    if not HAS_H5PY:
+        raise ImportError("需要安装 h5py: pip install h5py")
+    
+    print(f"\n📊 从 H5 加载 Darcy Flow: {h5_path}")
+    
+    with h5py.File(h5_path, 'r') as f:
+        # PDEBench 格式
+        if 'tensor' in f:
+            data = f['tensor'][:]
+        elif 'data' in f:
+            data = f['data'][:]
+        else:
+            # 尝试其他常见键
+            keys = list(f.keys())
+            data = f[keys[0]][:]
+        
+        # Darcy Flow 通常是 [N, H, W] 或 [N, 1, H, W]
+        if data.ndim == 3:
+            data = data[:, np.newaxis, :, :]  # 添加 channel 维度
+        
+        # 分割输入输出 (假设前一半是输入，后一半是输出)
+        n_samples = data.shape[0]
+        split = n_samples // 2
+        
+        train_x = torch.from_numpy(data[:n_train]).float()
+        train_y = torch.from_numpy(data[split:split+n_train]).float()
+        test_x = torch.from_numpy(data[n_train:n_train+n_test]).float()
+        test_y = torch.from_numpy(data[split+n_train:split+n_train+n_test]).float()
+        
+        # 下采样
+        if resolution and train_x.shape[-1] != resolution:
+            train_x = torch.nn.functional.interpolate(train_x, size=(resolution, resolution), mode='bilinear')
+            train_y = torch.nn.functional.interpolate(train_y, size=(resolution, resolution), mode='bilinear')
+            test_x = torch.nn.functional.interpolate(test_x, size=(resolution, resolution), mode='bilinear')
+            test_y = torch.nn.functional.interpolate(test_y, size=(resolution, resolution), mode='bilinear')
+    
+    info = {
+        'name': 'Darcy Flow (H5)',
+        'resolution': f'{train_x.shape[-1]}x{train_x.shape[-2]}',
+        'n_train': train_x.shape[0],
+        'n_test': test_x.shape[0],
+        'input_channels': train_x.shape[1],
+        'output_channels': train_y.shape[1],
+        'n_modes': (train_x.shape[-1] // 2, train_x.shape[-2] // 2),
+    }
+    
+    print(f"✅ 加载成功: 训练 {train_x.shape[0]}, 测试 {test_x.shape[0]}")
+    return train_x, train_y, test_x, test_y, info
+
+
+def load_h5_navier_stokes(h5_path, n_train=1000, n_test=200, resolution=None):
+    """从 H5 文件加载 Navier-Stokes 数据"""
+    if not HAS_H5PY:
+        raise ImportError("需要安装 h5py: pip install h5py")
+    
+    print(f"\n📊 从 H5 加载 Navier-Stokes: {h5_path}")
+    
+    with h5py.File(h5_path, 'r') as f:
+        # Navier-Stokes 通常是 [N, T, H, W] 或 [N, H, W]
+        if 'tensor' in f:
+            data = f['tensor'][:]
+        elif 'data' in f:
+            data = f['data'][:]
+        else:
+            keys = list(f.keys())
+            data = f[keys[0]][:]
+        
+        # 如果有时间维度，取最后时刻
+        if data.ndim == 4:
+            data = data[:, -1, :, :]  # 取最后时刻
+        
+        if data.ndim == 3:
+            data = data[:, np.newaxis, :, :]
+        
+        # 分割输入输出
+        n_samples = data.shape[0]
+        split = n_samples // 2
+        
+        train_x = torch.from_numpy(data[:n_train]).float()
+        train_y = torch.from_numpy(data[split:split+n_train]).float()
+        test_x = torch.from_numpy(data[n_train:n_train+n_test]).float()
+        test_y = torch.from_numpy(data[split+n_train:split+n_train+n_test]).float()
+        
+        if resolution and train_x.shape[-1] != resolution:
+            train_x = torch.nn.functional.interpolate(train_x, size=(resolution, resolution), mode='bilinear')
+            train_y = torch.nn.functional.interpolate(train_y, size=(resolution, resolution), mode='bilinear')
+            test_x = torch.nn.functional.interpolate(test_x, size=(resolution, resolution), mode='bilinear')
+            test_y = torch.nn.functional.interpolate(test_y, size=(resolution, resolution), mode='bilinear')
+    
+    info = {
+        'name': 'Navier-Stokes (H5)',
+        'resolution': f'{train_x.shape[-1]}x{train_x.shape[-2]}',
+        'n_train': train_x.shape[0],
+        'n_test': test_x.shape[0],
+        'input_channels': train_x.shape[1],
+        'output_channels': train_y.shape[1],
+        'n_modes': (train_x.shape[-1] // 4, train_x.shape[-2] // 4),
+    }
+    
+    print(f"✅ 加载成功: 训练 {train_x.shape[0]}, 测试 {test_x.shape[0]}")
+    return train_x, train_y, test_x, test_y, info
+
+
+def load_darcy_flow(n_train=1000, n_test=200, resolution=16, data_format='pt', data_path=None):
     """加载 Darcy Flow 数据集"""
     print(f"\n📊 加载 Darcy Flow ({resolution}x{resolution})...")
+    
+    # H5 格式
+    if data_format == 'h5' and data_path:
+        return load_h5_darcy(data_path, n_train, n_test, resolution)
+    
+    # PT 格式 (默认)
     
     try:
         import torch
@@ -415,6 +551,8 @@ def run_benchmark(dataset_name, config):
         data = load_darcy_flow(
             n_train=config['n_train'],
             n_test=config['n_test'],
+            data_format=config.get('data_format', 'pt'),
+            data_path=config.get('data_path'),
         )
     elif dataset_name == 'burgers':
         data = load_burgers(
@@ -541,6 +679,11 @@ def main():
     parser.add_argument('--dataset', type=str, default='darcy',
                        choices=['darcy', 'burgers', 'navier_stokes', 'all'],
                        help='数据集选择')
+    parser.add_argument('--format', type=str, default='pt',
+                       choices=['pt', 'h5'],
+                       help='数据格式 (pt=NeuralOperator内置, h5=PDEBench)')
+    parser.add_argument('--data_path', type=str, default=None,
+                       help='H5 数据文件路径 (format=h5 时需要)')
     parser.add_argument('--n_train', type=int, default=1000, help='训练集大小')
     parser.add_argument('--n_test', type=int, default=200, help='测试集大小')
     parser.add_argument('--epochs', type=int, default=50, help='训练轮数')
@@ -559,6 +702,8 @@ def main():
         'batch_size': args.batch_size,
         'learning_rate': args.lr,
         'seed': args.seed,
+        'data_format': args.format,
+        'data_path': args.data_path,
     }
     
     print("="*60)
