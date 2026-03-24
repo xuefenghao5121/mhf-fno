@@ -206,8 +206,14 @@ def load_burgers(n_train=1000, n_test=200):
     
     try:
         from neuralop.data.datasets import load_mini_burgers_1dtime
+        from pathlib import Path
+        
+        # 数据下载路径
+        data_path = Path.home() / '.neuralop' / 'data'
+        data_path.mkdir(parents=True, exist_ok=True)
         
         train_loader, test_loader, _ = load_mini_burgers_1dtime(
+            data_path=data_path,
             n_train=n_train,
             n_test=n_test,
             batch_size=32,

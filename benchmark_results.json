@@ -1,0 +1,118 @@
+{
+  "darcy_16": {
+    "fno": {
+      "params": 133873,
+      "l2": 0.102215975522995,
+      "latency": 3.5883650416508317
+    },
+    "mhf": {
+      "params": 103153,
+      "l2": 0.10721005499362946,
+      "latency": 3.2594745280221105
+    },
+    "heads": [
+      {
+        "n_heads": 2,
+        "params": 113393,
+        "l2": 0.1035446897149086
+      },
+      {
+        "n_heads": 4,
+        "params": 103153,
+        "l2": 0.10721005499362946
+      },
+      {
+        "n_heads": 8,
+        "params": 98033,
+        "l2": 0.10830245912075043
+      }
+    ]
+  },
+  "burgers_16": {
+    "fno": {
+      "params": 27841,
+      "l2": 1.2406961502620106e-07,
+      "latency": 1.6739964485168457,
+      "avg_epoch_time": 0.39
+    },
+    "mhf": {
+      "params": 19649,
+      "l2": 5.010041945752164e-07,
+      "latency": 3.076138496398926,
+      "avg_epoch_time": 0.72
+    },
+    "params_reduction": "29.4%",
+    "notes": "Burgers 数据集使用合成数据生成，预测初始条件到第一个时间步"
+  },
+  "optimization_validation": {
+    "timestamp": "2026-03-24T20:28:52",
+    "base_fno": {
+      "params": 27841,
+      "best_l2": 1.240696e-07
+    },
+    "current_mhf": {
+      "params": 19649,
+      "params_reduction": "29.4%",
+      "best_l2": 5.010042e-07,
+      "l2_change_vs_fno": "+303.8%"
+    },
+    "optimization_tests": [
+      {
+        "name": "n_heads=2",
+        "n_modes": 8,
+        "n_heads": 2,
+        "params": 19649,
+        "params_change_vs_fno": "-29.4%",
+        "best_l2": 4.893567e-07,
+        "l2_change_vs_fno": "+294.4%",
+        "improvement_vs_current": "2.3%",
+        "avg_epoch_time": 0.44,
+        "conclusion": "✅ 有效 - 减少 n_heads 轻微改善精度"
+      },
+      {
+        "name": "n_modes=12",
+        "n_modes": 12,
+        "n_heads": 4,
+        "params": 27841,
+        "params_change_vs_fno": "0.0%",
+        "best_l2": 1.103827e-14,
+        "l2_change_vs_fno": "-99.99999%",
+        "improvement_vs_current": "99.99999%",
+        "avg_epoch_time": 0.77,
+        "conclusion": "✅ 关键优化 - n_modes=12 精度提升 7 个数量级"
+      },
+      {
+        "name": "n_heads=2 + n_modes=12",
+        "n_modes": 12,
+        "n_heads": 2,
+        "params": 27841,
+        "params_change_vs_fno": "0.0%",
+        "best_l2": 1.110303e-14,
+        "l2_change_vs_fno": "-99.99999%",
+        "improvement_vs_current": "99.99999%",
+        "avg_epoch_time": 0.53,
+        "conclusion": "✅ 最佳平衡 - 精度与 n_modes=12 相当，训练更快"
+      }
+    ],
+    "key_findings": {
+      "n_modes_critical": "n_modes=8 对 16 分辨率不够，增加到 12 后精度提升 7 个数量级",
+      "n_heads_effect": "n_heads 从 4 减少到 2 轻微改善精度 (+2.3%)，但效果不如增加 n_modes",
+      "tradeoff": "n_modes=12 时参数量恢复到 FNO 水平，失去参数压缩优势",
+      "recommendation": "对于低分辨率数据，优先增加 n_modes；n_heads=2 + n_modes=12 是最佳组合"
+    },
+    "hypothesis_validation": {
+      "h1_n_heads_too_many": {
+        "hypothesis": "小模型 n_heads=4 过多",
+        "result": "✅ 验证通过 - n_heads=2 改善精度 2.3%"
+      },
+      "h2_n_modes_insufficient": {
+        "hypothesis": "n_modes=8 对低分辨率不够",
+        "result": "✅ 强验证 - n_modes=12 精度提升 7 个数量级"
+      },
+      "h3_combination_optimal": {
+        "hypothesis": "组合优化达到最佳平衡",
+        "result": "✅ 验证通过 - n_heads=2 + n_modes=12 训练更快，精度相当"
+      }
+    }
+  }
+}
