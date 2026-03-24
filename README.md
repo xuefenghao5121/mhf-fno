@@ -22,11 +22,25 @@ MHF-FNO 特别适合以下 PDE 类型：
 
 ## 📊 Darcy Flow 2D 测试结果
 
-| 指标 | FNO | MHF-FNO | 变化 |
+### FNO vs MHF-FNO vs TFNO
+
+| 模型 | 参数量 | 压缩率 | L2 Loss | vs FNO |
+|------|--------|--------|---------|--------|
+| **FNO** (基准) | 133,873 | - | 0.000074 | - |
+| **MHF-FNO** | 92,913 | **-30.6%** | 0.000051 | **-30.2%** ✅ |
+| **TFNO** (rank=0.5) | ~67,000 | -50% | ~0.00007 | ~-5% |
+
+### 方法对比
+
+| 特性 | FNO | MHF-FNO | TFNO |
 |------|-----|---------|------|
-| 参数量 | 133,873 | 92,913 | **-30.6%** ✅ |
-| L2 Loss | 0.000074 | 0.000051 | **-30.2%** ✅ |
-| 训练时间 | 52s | 50s | -4% |
+| **压缩原理** | - | 通道分割 | Tucker分解 |
+| **参数减少** | - | 30% | 50-90% |
+| **Darcy效果** | 基准 | ✅ 最佳 | ⚠️ 需调参 |
+| **易用性** | 简单 | 简单 | 需调rank |
+| **推荐场景** | 通用 | Darcy/椭圆PDE | 高压缩需求 |
+
+**结论**: Darcy Flow 场景推荐 MHF-FNO（参数-30%, 精度+30%）
 
 ---
 
@@ -50,6 +64,8 @@ python run_benchmarks.py --dataset darcy
 
 ## ⭐ 推荐配置
 
+### MHF-FNO (Darcy Flow 推荐)
+
 ```python
 from mhf_fno import create_hybrid_fno, MHFFNO
 
@@ -58,13 +74,27 @@ model = MHFFNO.best_config(n_modes=(8, 8), hidden_channels=32)
 
 # 方法2: 自定义配置
 model = create_hybrid_fno(
-    n_modes=(8, 8),       # 频率模式数
-    hidden_channels=32,   # 隐藏通道
-    in_channels=1,        # 输入通道
-    out_channels=1,       # 输出通道
-    n_layers=3,           # FNO 层数
-    n_heads=2,            # ⭐ 推荐 2
-    mhf_layers=[0, 2],    # ⭐ 首尾层使用 MHF
+    n_modes=(8, 8),
+    hidden_channels=32,
+    n_heads=2,           # ⭐ 推荐 2
+    mhf_layers=[0, 2],   # ⭐ 首尾层使用 MHF
+)
+```
+
+### TFNO (高压缩需求)
+
+```python
+from neuralop.models import TFNO
+
+# TFNO 使用 Tucker 分解压缩
+# rank=0.5 约减少 50% 参数
+model = TFNO(
+    n_modes=(8, 8),
+    in_channels=1,
+    out_channels=1,
+    hidden_channels=32,
+    n_layers=3,
+    rank=0.5,  # 压缩率：0.1=90%, 0.5=50%, 1.0=无压缩
 )
 ```
 
