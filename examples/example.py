@@ -36,46 +36,68 @@ class MHFSpectralConv(nn.Module):
         self.out_channels = out_channels
         self.n_modes = n_modes
         self.n_heads = n_heads
-        self.head_channels = out_channels // n_heads
         
-        # 频域权重
+        # 检查是否能被 n_heads 整除
+        if in_channels % n_heads != 0 or out_channels % n_heads != 0:
+            raise ValueError(f"通道数 ({in_channels}, {out_channels}) 必须能被 n_heads ({n_heads}) 整除")
+        
+        self.head_in = in_channels // n_heads
+        self.head_out = out_channels // n_heads
+        
+        # 频域权重: [n_heads, head_in, head_out, *n_modes]
+        # 使用复数类型避免 forward 中转换
+        modes_y = n_modes[1] // 2 + 1 if len(n_modes) > 1 else n_modes[0]
+        weight_shape = (n_heads, self.head_in, self.head_out, n_modes[0], modes_y)
+        
+        init_std = (2 / (in_channels + out_channels)) ** 0.5
         self.weight = nn.Parameter(
-            torch.randn(n_heads, self.head_channels, self.head_channels, *n_modes)
+            torch.randn(*weight_shape, dtype=torch.cfloat) * init_std
         )
-        self.fc = nn.Linear(in_channels, out_channels)
+        
+        self.bias = nn.Parameter(torch.zeros(out_channels, 1, 1))
         self._init_weights()
     
     def _init_weights(self):
-        with torch.no_grad():
-            for h in range(self.n_heads):
-                scale = 0.01 * (2 ** h)
-                nn.init.normal_(self.weight[h], mean=0, std=scale)
-            nn.init.xavier_normal_(self.fc.weight)
-            nn.init.zeros_(self.fc.bias)
+        nn.init.zeros_(self.bias)
     
     def forward(self, x):
-        batch_size = x.shape[0]
-        x_ft = torch.fft.rfftn(x, dim=(-2, -1))
+        B, C, H, W = x.shape
         
-        out_ft = torch.zeros(
-            batch_size, self.out_channels, *x_ft.shape[-2:],
-            dtype=x_ft.dtype, device=x.device
+        # 2D FFT
+        x_freq = torch.fft.rfft2(x, dim=(-2, -1))
+        freq_H, freq_W = x_freq.shape[-2], x_freq.shape[-1]
+        
+        # 模式数
+        m_x = min(self.n_modes[0], freq_H)
+        m_y = min(self.weight.shape[-1], freq_W)
+        
+        # 重塑为多头格式: [B, n_heads, head_in, H, W]
+        x_freq = x_freq.view(B, self.n_heads, self.head_in, freq_H, freq_W)
+        
+        # 输出张量
+        out_freq = torch.zeros(
+            B, self.n_heads, self.head_out, freq_H, freq_W,
+            dtype=x_freq.dtype, device=x.device
         )
         
-        for h in range(self.n_heads):
-            start = h * self.head_channels
-            end = start + self.head_channels
-            for i in range(min(self.n_modes[0], x_ft.shape[-2])):
-                for j in range(min(self.n_modes[1], x_ft.shape[-1])):
-                    out_ft[:, start:end, i, j] = torch.einsum(
-                        'bi,bio->bo',
-                        x_ft[:, :, i, j],
-                        self.weight[h, :, :, i, j]
-                    )
+        # 多头频域卷积 (向量化)
+        # einsum: 输入 [B, h, i, X, Y], 权重 [h, i, o, X, Y] -> 输出 [B, h, o, X, Y]
+        out_freq[:, :, :, :m_x, :m_y] = torch.einsum(
+            'bhixy,hioxy->bhoxy',
+            x_freq[:, :, :, :m_x, :m_y],
+            self.weight[..., :m_x, :m_y]
+        )
         
-        x = torch.fft.irfftn(out_ft, dim=(-2, -1))
-        x = self.fc(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
-        return x
+        # 合并多头
+        out_freq = out_freq.reshape(B, self.out_channels, freq_H, freq_W)
+        
+        # IFFT
+        x_out = torch.fft.irfft2(out_freq, s=(H, W), dim=(-2, -1))
+        
+        # 添加偏置
+        x_out = x_out + self.bias
+        
+        return x_out
 
 
 class MHFFNO(nn.Module):
@@ -94,6 +116,7 @@ class MHFFNO(nn.Module):
         self.fc_in = nn.Linear(in_channels, hidden_channels)
         
         self.fno_blocks = nn.ModuleList()
+        self.use_mhf_list = []
         for i in range(n_layers):
             use_mhf = i in self.mhf_layers
             block = nn.ModuleDict({
@@ -101,17 +124,17 @@ class MHFFNO(nn.Module):
                     hidden_channels, hidden_channels, n_modes, n_heads
                 ) if use_mhf else nn.Identity(),
                 'w': nn.Conv2d(hidden_channels, hidden_channels, 1),
-                'use_mhf': use_mhf,
             })
             self.fno_blocks.append(block)
+            self.use_mhf_list.append(use_mhf)
         
         self.fc_out = nn.Linear(hidden_channels, out_channels)
     
     def forward(self, x):
         x = self.fc_in(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
         
-        for block in self.fno_blocks:
-            if block['use_mhf']:
+        for i, block in enumerate(self.fno_blocks):
+            if self.use_mhf_list[i]:
                 x = x + block['conv'](x)
             x = x + block['w'](x)
         
