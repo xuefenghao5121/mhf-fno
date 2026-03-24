@@ -163,12 +163,26 @@ mhf-fno/
 ```bash
 cd benchmark
 
-# 生成数据
-python generate_data.py --dataset darcy --n_train 500 --n_test 100
+# 生成不同分辨率的 Darcy 数据
+python generate_data.py --dataset darcy --resolution 16 --n_train 500
+python generate_data.py --dataset darcy --resolution 32 --n_train 500
+python generate_data.py --dataset darcy --resolution 64 --n_train 500
 
 # 运行测试
 python run_benchmarks.py --dataset darcy
+
+# 三种方法对比
+python compare_fno_mhf_tfno.py
 ```
+
+### 支持的分辨率
+
+| 分辨率 | FNO 参数 | MHF-FNO 参数 | 推荐场景 |
+|--------|----------|--------------|----------|
+| 16×16 | 133,873 | 92,913 | 快速验证 |
+| 32×32 | 133,873 | 92,913 | 标准测试 |
+| 64×64 | 133,873 | 92,913 | 高精度需求 |
+| 128×128 | 133,873 | 92,913 | 大规模问题 |
 
 详见 `benchmark/BENCHMARK_GUIDE.md`
 
