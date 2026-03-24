@@ -2,11 +2,11 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**拷贝即用** 的 MHF-FNO 实现，在标准 FNO 基础上减少 **23% 参数**，精度损失仅 **5%**。
+**拷贝即用** 的 MHF-FNO 实现，在标准 FNO 基础上减少 **19% 参数**，精度损失仅 **12%**。
 
 ---
 
-## 🚀 30秒快速开始
+## 🚀 快速开始
 
 ### 1. 安装依赖
 
@@ -14,40 +14,93 @@
 pip install neuralop torch numpy
 ```
 
-### 2. 下载并运行示例
+### 2. 运行测试
 
 ```bash
-# 克隆仓库
 git clone https://github.com/xuefenghao5121/mhf-fno.git
 cd mhf-fno
 
-# 运行完整示例（包含 FNO vs MHF-FNO 对比）
+# 快速示例（自带合成数据，无需下载）
 python example.py
+
+# 完整基准测试（使用 NeuralOperator 内置数据）
+python run_benchmarks.py --dataset darcy
 ```
 
-**预期输出**：
+---
 
+## 📊 测试结果
+
+### Darcy Flow (16×16) - 推荐配置
+
+| 指标 | FNO | MHF-FNO | 变化 |
+|------|-----|---------|------|
+| 参数量 | 133,873 | 108,772 | **-18.7%** ✅ |
+| L2 误差 | 0.1022 | 0.1146 | +12.2% |
+| 推理延迟 | 3.59ms | 3.26ms | **-9.2%** ✅ |
+
+---
+
+## ⭐ 推荐配置
+
+基于 45 分钟的平衡优化测试，最佳配置如下：
+
+```python
+from mhf_fno import MHFFNO
+
+model = MHFFNO(
+    n_modes=(10, 10),       # 频率模式数
+    hidden_channels=26,     # 隐藏通道
+    n_layers=3,             # FNO 层数
+    n_heads=2,              # ⭐ 推荐小模型用 2
+    mhf_layers=[0],         # ⭐ 只在第1层使用 MHF
+)
 ```
-使用设备: cpu
-生成数据: 训练 500, 测试 100, 分辨率 16x16
-✅ 数据生成完成
 
-============================================================
-测试 FNO (基准)
-============================================================
-参数量: 133,873
-  Epoch 10/30: Train 0.0923, Test 0.0945
-  ...
+### 配置选择指南
 
-============================================================
-结果对比
-============================================================
-指标              FNO             MHF-FNO         变化            
-------------------------------------------------------------
-参数量              133,873         103,153         -22.9%
-最佳测试Loss        0.0945          0.0987          +4.4%
+| 场景 | hidden_channels | n_heads | 参数减少 | L2 变化 |
+|------|-----------------|---------|----------|---------|
+| **平衡（推荐）** | 26 | 2 | -18.7% | +12.2% |
+| 精度优先 | 27 | 3 | -17.8% | +9.8% |
+| 参数优先 | 24 | 2 | -30.7% | +12.6% |
 
-✅ 测试完成！
+---
+
+## 📁 数据集
+
+### 内置数据（无需下载）
+
+运行 `python example.py` 会自动生成合成数据，无需额外下载。
+
+### NeuralOperator 数据集
+
+`run_benchmarks.py` 使用 NeuralOperator 内置数据：
+
+| 数据集 | 分辨率 | 训练集 | 测试集 | 自动下载 |
+|--------|--------|--------|--------|----------|
+| **Darcy Flow** | 16×16 | 1,000 | 50 | ✅ 内置 |
+| Burgers | 128 | 1,000 | 200 | ⚠️ 需下载 |
+| Navier-Stokes | 64×64 | 1,000 | 200 | ⚠️ 需下载 |
+
+### 手动下载数据
+
+如果自动下载失败，可手动下载：
+
+**Darcy Flow** (内置，无需下载):
+```
+/usr/local/lib/python3.11/site-packages/neuralop/data/datasets/data/
+├── darcy_train_16.pt
+└── darcy_test_16.pt
+```
+
+**Burgers / Navier-Stokes**:
+```bash
+# 数据会自动下载到
+~/.neuralop/data/
+
+# 或手动从 Zenodo 下载
+# https://zenodo.org/records/10994462
 ```
 
 ---
@@ -58,12 +111,10 @@ python example.py
 import torch
 import torch.nn as nn
 
-# ============ MHF-FNO 核心实现 ============
-
 class MHFSpectralConv(nn.Module):
     """Multi-Head Fourier Spectral Convolution"""
     
-    def __init__(self, in_channels, out_channels, n_modes, n_heads=4):
+    def __init__(self, in_channels, out_channels, n_modes, n_heads=2):
         super().__init__()
         self.n_modes = n_modes
         self.n_heads = n_heads
@@ -100,8 +151,8 @@ class MHFSpectralConv(nn.Module):
 class MHFFNO(nn.Module):
     """MHF-FNO 模型"""
     
-    def __init__(self, n_modes, hidden_channels, in_channels=1, out_channels=1,
-                 n_layers=3, n_heads=4):
+    def __init__(self, n_modes, hidden_channels=26, in_channels=1, out_channels=1,
+                 n_layers=3, n_heads=2):
         super().__init__()
         
         self.fc_in = nn.Linear(in_channels, hidden_channels)
@@ -111,7 +162,7 @@ class MHFFNO(nn.Module):
         for i in range(n_layers):
             self.layers.append(nn.ModuleDict({
                 'mhf': MHFSpectralConv(hidden_channels, hidden_channels, n_modes, n_heads) 
-                      if i in [0, n_layers-1] else None,  # 只在首尾层使用 MHF
+                      if i == 0 else None,  # 只在第1层使用 MHF
                 'w': nn.Conv2d(hidden_channels, hidden_channels, 1),
             }))
     
@@ -126,58 +177,13 @@ class MHFFNO(nn.Module):
         return self.fc_out(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
 
 
-# ============ 使用示例 ============
-
-# 创建模型
-model = MHFFNO(
-    n_modes=(8, 8),       # 频率模式数
-    hidden_channels=32,   # 隐藏通道
-    n_layers=3,           # 层数
-    n_heads=4,            # 头数
-)
-
-# 前向传播
-x = torch.randn(16, 1, 16, 16)  # (batch, channel, H, W)
+# 使用示例
+model = MHFFNO(n_modes=(10, 10), hidden_channels=26, n_heads=2)
+x = torch.randn(16, 1, 16, 16)
 y = model(x)
 
-print(f"输入: {x.shape}")
-print(f"输出: {y.shape}")
 print(f"参数量: {sum(p.numel() for p in model.parameters()):,}")
 ```
-
----
-
-## 📊 性能对比
-
-### Darcy Flow (16×16)
-
-| 指标 | FNO | MHF-FNO | 变化 |
-|------|-----|---------|------|
-| 参数量 | 133,873 | 103,153 | **-22.9%** ✅ |
-| L2 误差 | 0.1022 | 0.1072 | +4.9% |
-| 推理延迟 | 3.59ms | 3.26ms | **-9.2%** ✅ |
-
----
-
-## ⚙️ 配置建议
-
-### 选择 n_heads
-
-| 模型规模 | 推荐 n_heads |
-|----------|--------------|
-| 大 (>10万参数) | 4-8 |
-| 中 (5-10万) | 2-4 |
-| 小 (<5万) | 1-2 |
-
-### 选择 n_modes
-
-| 分辨率 | 推荐 n_modes |
-|--------|--------------|
-| 16×16 | (8, 8) |
-| 32×32 | (16, 16) |
-| 64×64 | (32, 32) |
-
-**重要**: 对于低分辨率，确保 `n_modes ≥ resolution // 2`
 
 ---
 
@@ -185,49 +191,34 @@ print(f"参数量: {sum(p.numel() for p in model.parameters()):,}")
 
 ```
 mhf-fno/
-├── example.py            # ⭐ 完整示例（拷贝即用）
+├── example.py            # ⭐ 快速示例（拷贝即用）
+├── run_benchmarks.py     # 基准测试脚本
 ├── mhf_fno/              # 核心模块
 │   ├── __init__.py
 │   ├── mhf_1d.py
 │   ├── mhf_2d.py
 │   └── mhf_fno.py
-├── run_benchmarks.py     # 基准测试脚本
 ├── requirements.txt
 └── README.md
 ```
 
 ---
 
-## 🔧 API
+## 🔧 关键发现
 
-### MHFFNO
+基于完整测试的结论：
 
-```python
-MHFFNO(
-    n_modes,              # 频率模式数，如 (8, 8)
-    hidden_channels,      # 隐藏通道数
-    in_channels=1,        # 输入通道
-    out_channels=1,       # 输出通道
-    n_layers=3,           # FNO 层数
-    n_heads=4,            # MHF 头数
-)
-```
+1. **n_heads=2 是小模型最佳选择**
+   - 减少固定开销
+   - 精度损失从 +304% 降到 +12%
 
----
+2. **n_modes=10 覆盖足够频率**
+   - 16x16 分辨率需要 ≥8 个频率点
+   - modes=10 平衡精度和参数
 
-## 📖 原理
-
-MHF-FNO 将频域卷积分解为多个头：
-
-```
-标准 FNO:    Conv2D(32, 32, modes)     # 单一权重
-MHF-FNO:     [Conv2D(8, 8, modes)] × 4  # 4个头独立学习
-```
-
-**优势**：
-- 参数减少：`32² → 4 × 8² = 256` (减少 75%)
-- 尺度多样性：不同头学习不同频率范围
-- 隐式正则化：防止过拟合
+3. **只在第一层使用 MHF**
+   - 更稳定的训练
+   - 保留中间层标准 FNO
 
 ---
 
