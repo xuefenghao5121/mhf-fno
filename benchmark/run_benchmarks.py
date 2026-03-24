@@ -57,8 +57,12 @@ class MHFSpectralConv(nn.Module):
         # 每个头的通道数
         self.head_channels = out_channels // n_heads
         
-        # 可学习的频域权重 (每个头独立)
-        self.weight = nn.Parameter(
+        # 可学习的频域权重 (每个头独立) - 复数形式
+        # 使用实部和虚部分开存储
+        self.weight_real = nn.Parameter(
+            torch.randn(n_heads, self.head_channels, self.head_channels, *n_modes)
+        )
+        self.weight_imag = nn.Parameter(
             torch.randn(n_heads, self.head_channels, self.head_channels, *n_modes)
         )
         
@@ -73,7 +77,8 @@ class MHFSpectralConv(nn.Module):
         with torch.no_grad():
             for h in range(self.n_heads):
                 scale = 0.01 * (2 ** h)  # 不同头使用不同尺度
-                nn.init.normal_(self.weight[h], mean=0, std=scale)
+                nn.init.normal_(self.weight_real[h], mean=0, std=scale)
+                nn.init.normal_(self.weight_imag[h], mean=0, std=scale)
             nn.init.xavier_normal_(self.fc.weight)
             nn.init.zeros_(self.fc.bias)
     
@@ -90,18 +95,29 @@ class MHFSpectralConv(nn.Module):
         )
         
         for h in range(self.n_heads):
-            # 每个头处理一部分输出通道
-            start = h * self.head_channels
-            end = start + self.head_channels
+            # 每个头处理对应的输入/输出通道
+            in_start = h * self.head_channels
+            in_end = in_start + self.head_channels
+            out_start = h * self.head_channels
+            out_end = out_start + self.head_channels
             
             # 频域卷积 (只处理低频部分)
-            for i in range(min(self.n_modes[0], x_ft.shape[-2])):
-                for j in range(min(self.n_modes[1], x_ft.shape[-1])):
-                    out_ft[:, start:end, i, j] = torch.einsum(
-                        'bi,bio->bo',
-                        x_ft[:, :, i, j],
-                        self.weight[h, :, :, i, j]
-                    )
+            modes_x = min(self.n_modes[0], x_ft.shape[-2])
+            modes_y = min(self.n_modes[1], x_ft.shape[-1])
+            
+            for i in range(modes_x):
+                for j in range(modes_y):
+                    # 复数乘法: (a+bi)(c+di) = (ac-bd) + (ad+bc)i
+                    x_real = x_ft[:, in_start:in_end, i, j].real
+                    x_imag = x_ft[:, in_start:in_end, i, j].imag
+                    w_real = self.weight_real[h, :, :, i, j]
+                    w_imag = self.weight_imag[h, :, :, i, j]
+                    
+                    # out = x @ w (复数矩阵乘法)
+                    out_real = torch.matmul(x_real, w_real) - torch.matmul(x_imag, w_imag)
+                    out_imag = torch.matmul(x_real, w_imag) + torch.matmul(x_imag, w_real)
+                    
+                    out_ft[:, out_start:out_end, i, j] = torch.complex(out_real, out_imag)
         
         # IFFT
         x = torch.fft.irfftn(out_ft, dim=(-2, -1))
@@ -130,19 +146,24 @@ class MHFFNO(nn.Module):
         # 输入投影
         self.fc_in = nn.Linear(in_channels, hidden_channels)
         
-        # FNO 层
+        # FNO 层 - 存储层配置
+        self.use_mhf_per_layer = []
         self.fno_blocks = nn.ModuleList()
         for i in range(n_layers):
             use_mhf = i in self.mhf_layers
+            self.use_mhf_per_layer.append(use_mhf)
             
-            block = nn.ModuleDict({
-                'conv': MHFSpectralConv(
+            if use_mhf:
+                conv = MHFSpectralConv(
                     hidden_channels, hidden_channels, n_modes, n_heads
-                ) if use_mhf else nn.Identity(),
+                )
+            else:
+                conv = nn.Identity()
+            
+            self.fno_blocks.append(nn.ModuleDict({
+                'conv': conv,
                 'w': nn.Conv2d(hidden_channels, hidden_channels, 1),
-                'use_mhf': use_mhf,
-            })
-            self.fno_blocks.append(block)
+            }))
         
         # 输出投影
         self.fc_out = nn.Linear(hidden_channels, out_channels)
@@ -152,8 +173,8 @@ class MHFFNO(nn.Module):
         x = self.fc_in(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
         
         # FNO 层
-        for block in self.fno_blocks:
-            if block['use_mhf']:
+        for i, block in enumerate(self.fno_blocks):
+            if self.use_mhf_per_layer[i]:
                 x = x + block['conv'](x)
             x = x + block['w'](x)
         

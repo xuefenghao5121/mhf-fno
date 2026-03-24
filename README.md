@@ -147,6 +147,52 @@ y = model(x)
 
 ---
 
+## 📖 论文参数参考
+
+基于 FNO 论文 (Li et al., 2020) 和 PDEBench (Takamoto et al., 2022) 的标准参数：
+
+### Darcy Flow 2D
+
+| 参数 | FNO 论文 | PDEBench |
+|------|----------|----------|
+| 分辨率 | 16×16 | 421×421 |
+| 训练样本 | 1,000 | 5,000 |
+| 测试样本 | 100 | 500 |
+| 渗透系数 | 高斯随机场 (α=2.0, τ=3.0) | 高斯随机场 |
+
+### Burgers 1D
+
+| 参数 | FNO 论文 | PDEBench |
+|------|----------|----------|
+| 空间分辨率 | 1024 | 1024 |
+| 粘性系数 ν | 0.1 | 0.01 |
+| 时间步数 | 200 | 2,000 |
+
+### Navier-Stokes 2D
+
+| 参数 | FNO 论文 | PDEBench |
+|------|----------|----------|
+| 分辨率 | 64×64 | 128×128 |
+| 粘度 ν | 1e-3 | 1e-3 ~ 1e-5 |
+| 雷诺数 Re | ~1,000 | 1,000 ~ 100,000 |
+| 时间步数 | 20 | 2,000 |
+
+### 使用示例
+
+```bash
+# FNO 论文参数 (快速验证)
+python generate_data.py --dataset darcy --resolution 16 --n_train 1000
+
+# PDEBench 参数 (完整基准)
+python generate_data.py --dataset darcy --resolution 421 --n_train 5000
+```
+
+**参考文献**:
+- FNO: Li et al., 2020. [arXiv:2010.08895](https://arxiv.org/abs/2010.08895)
+- PDEBench: Takamoto et al., 2022. [arXiv:2210.07182](https://arxiv.org/abs/2210.07182)
+
+---
+
 ## 🔧 运行基准测试
 
 ```bash

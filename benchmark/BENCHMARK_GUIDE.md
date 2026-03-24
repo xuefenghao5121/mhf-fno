@@ -4,6 +4,50 @@
 
 ---
 
+## 快速开始（推荐）
+
+### 自生成数据
+
+**推荐使用数据生成脚本**，避免下载 PDEBench 数据的网络问题：
+
+```bash
+cd benchmark
+
+# 生成 Darcy Flow 数据 (默认 16x16)
+python generate_data.py --dataset darcy
+
+# 生成 Burgers 数据
+python generate_data.py --dataset burgers
+
+# 生成 Navier-Stokes 数据
+python generate_data.py --dataset navier_stokes --resolution 64
+
+# 生成所有数据集
+python generate_data.py --dataset all
+```
+
+生成完成后，直接运行基准测试：
+
+```bash
+python run_benchmarks.py --dataset darcy
+```
+
+### 生成参数说明
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--dataset` | darcy | 数据集 (darcy/burgers/navier_stokes/all) |
+| `--n_train` | 1000 | 训练样本数 |
+| `--n_test` | 200 | 测试样本数 |
+| `--resolution` | 16 | 空间分辨率 (Darcy/NS) |
+| `--n_points` | 1024 | 空间点数 (Burgers) |
+| `--viscosity` | 0.1 | 粘性系数 |
+| `--n_steps` | 100 | 时间步数 (Navier-Stokes) |
+| `--output_dir` | ./data | 输出目录 |
+| `--device` | cpu | 计算设备 (cpu/cuda) |
+
+---
+
 ## 数据集信息
 
 ### 内置数据（无需下载）
@@ -135,6 +179,56 @@ A: 减小 batch_size：
 ```bash
 python run_benchmarks.py --dataset darcy --batch_size 16
 ```
+
+---
+
+## 数据生成原理
+
+### Darcy Flow
+
+求解椭圆 PDE：
+```
+-∇·(a(x)∇u(x)) = f(x),  x∈[0,1]²
+u|∂Ω = 0
+```
+
+生成方法：
+1. 使用高斯随机场生成渗透系数 a(x)
+2. 使用 Jacobi 迭代求解压力场 u(x)
+
+### Burgers 1D
+
+求解对流扩散方程：
+```
+∂u/∂t + u∂u/∂x = ν∂²u/∂x²
+```
+
+生成方法：
+1. 随机初始条件
+2. 使用伪光谱法时间推进
+
+### Navier-Stokes 2D
+
+求解涡度形式：
+```
+∂ω/∂t + u·∇ω = ν∇²ω + f
+```
+
+生成方法：
+1. 随机涡旋叠加作为初始涡度
+2. 使用伪光谱法时间推进
+
+---
+
+## 生成 vs 下载对比
+
+| 特性 | 自生成 | PDEBench 下载 |
+|------|--------|---------------|
+| 网络依赖 | ❌ 无 | ✅ 需要 |
+| 数据大小 | 可控 | 固定 (~2GB) |
+| 分辨率 | 可调 | 固定 |
+| 生成时间 | ~5-30分钟 | 下载时间 |
+| 数据质量 | 合成数据 | 真实模拟 |
 
 ---
 
