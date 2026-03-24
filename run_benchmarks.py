@@ -163,23 +163,42 @@ def load_darcy_flow(n_train=1000, n_test=200, resolution=16):
     print(f"\n📊 加载 Darcy Flow ({resolution}x{resolution})...")
     
     try:
-        from neuralop.data.datasets import load_darcy_flow_small
+        import torch
+        from pathlib import Path
         
-        train_loader, test_loader, _ = load_darcy_flow_small(
-            n_train=n_train,
-            n_test=n_test,
-            batch_size=32,
-            test_batch_size=32,
-        )
+        # 直接加载内置数据
+        data_path = Path('/usr/local/lib/python3.11/site-packages/neuralop/data/datasets/data/')
         
-        # 获取数据
-        train_batch = next(iter(train_loader))
-        test_batch = next(iter(test_loader))
-        
-        train_x = train_batch['x']
-        train_y = train_batch['y']
-        test_x = test_batch['x']
-        test_y = test_batch['y']
+        if not (data_path / 'darcy_train_16.pt').exists():
+            # 如果没有内置数据，使用 API 下载
+            from neuralop.data.datasets import load_darcy_flow_small
+            train_loader, test_loader, _ = load_darcy_flow_small(
+                n_train=n_train,
+                n_tests=[n_test],
+                batch_size=32,
+                test_batch_sizes=[32],
+            )
+            train_batch = next(iter(train_loader))
+            test_batch = next(iter(test_loader))
+            train_x = train_batch['x']
+            train_y = train_batch['y']
+            test_x = test_batch['x']
+            test_y = test_batch['y']
+        else:
+            # 使用内置数据
+            train_data = torch.load(data_path / 'darcy_train_16.pt', weights_only=False)
+            test_data = torch.load(data_path / 'darcy_test_16.pt', weights_only=False)
+            
+            train_x = train_data['x'].unsqueeze(1).float()  # 添加 channel 维度
+            train_y = train_data['y'].unsqueeze(1).float()
+            test_x = test_data['x'].unsqueeze(1).float()
+            test_y = test_data['y'].unsqueeze(1).float()
+            
+            # 限制样本数
+            train_x = train_x[:n_train]
+            train_y = train_y[:n_train]
+            test_x = test_x[:n_test]
+            test_y = test_y[:n_test]
         
         info = {
             'name': 'Darcy Flow',
