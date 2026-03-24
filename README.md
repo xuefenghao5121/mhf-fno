@@ -45,10 +45,13 @@ python examples/example.py
 ## ⭐ 推荐配置
 
 ```python
-from mhf_fno import MHFFNO
+from mhf_fno import create_hybrid_fno, MHFFNO
 
-# 最佳配置 (经多数据集验证)
-model = MHFFNO(
+# 方法1: 使用预设配置 (推荐)
+model = MHFFNO.best_config(n_modes=(8, 8), hidden_channels=32)
+
+# 方法2: 自定义配置
+model = create_hybrid_fno(
     n_modes=(8, 8),       # 频率模式数
     hidden_channels=32,   # 隐藏通道
     in_channels=1,        # 输入通道
