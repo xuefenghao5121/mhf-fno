@@ -13,6 +13,7 @@ MHF-FNO 多数据集综合测试
 
 import argparse
 import json
+import os
 import time
 from datetime import datetime
 from pathlib import Path
@@ -23,6 +24,12 @@ import torch
 import torch.nn as nn
 from neuralop.losses.data_losses import LpLoss
 from neuralop.models import FNO
+
+# ============================================================================
+# CPU 优化: 使用所有可用核心
+# ============================================================================
+torch.set_num_threads(os.cpu_count() or 1)
+print(f"🔧 PyTorch 使用 {torch.get_num_threads()} 个 CPU 线程")
 
 # 导入 MHF-FNO 核心库
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -70,51 +77,11 @@ def get_test_path(train_path):
 
 
 # ============================================================================
-# 模型定义
+# 模型定义 - 使用核心库
 # ============================================================================
 
-class MHFFNO1D(nn.Module):
-    """1D MHF-FNO 包装器"""
-    def __init__(self, n_modes, hidden_channels, in_channels=1, out_channels=1, 
-                 n_layers=3, n_heads=4):
-        super().__init__()
-        from mhf_fno import MHFSpectralConv
-        
-        self.fc_in = nn.Linear(in_channels, hidden_channels)
-        self.layers = nn.ModuleList()
-        
-        # 确保 n_modes 是元组
-        if isinstance(n_modes, int):
-            n_modes = (n_modes,)
-        
-        for i in range(n_layers):
-            conv = MHFSpectralConv(
-                hidden_channels, hidden_channels, n_modes, n_heads=n_heads
-            )
-            fc = nn.Linear(hidden_channels, hidden_channels)
-            self.layers.append(nn.ModuleDict({'spectral': conv, 'fc': fc}))
-        
-        self.fc_out = nn.Linear(hidden_channels, out_channels)
-    
-    def forward(self, x):
-        # x: [B, C, L]
-        x = x.permute(0, 2, 1)  # [B, L, C]
-        x = self.fc_in(x)  # [B, L, H]
-        
-        for layer in self.layers:
-            # Spectral conv
-            x1 = x.permute(0, 2, 1)  # [B, H, L]
-            x1 = layer['spectral'](x1)
-            x1 = x1.permute(0, 2, 1)  # [B, L, H]
-            
-            # FC
-            x2 = layer['fc'](x)
-            
-            x = x + x1 + x2  # Residual
-        
-        x = self.fc_out(x)
-        x = x.permute(0, 2, 1)  # [B, C, L]
-        return x
+# 注意: 不再使用自定义 MHFFNO1D，改用核心库的 create_hybrid_fno
+# 原因: 自定义实现缺少激活函数，导致性能严重下降
 
 
 # ============================================================================
@@ -269,23 +236,17 @@ def run_single_dataset(dataset_name, train_path, test_path, config):
     print(f"\n--- 测试 MHF-FNO ---")
     torch.manual_seed(config['seed'])
     
-    if is_1d:
-        model_mhf = MHFFNO1D(
-            n_modes=n_modes,
-            hidden_channels=hidden_channels,
-            in_channels=info['input_channels'],
-            out_channels=info['output_channels'],
-            n_layers=3,
-            n_heads=4,
-        )
-    else:
-        # 使用 MHFFNO 工厂类创建模型
-        model_mhf = MHFFNO.best_config(
-            n_modes=n_modes_tuple,
-            hidden_channels=hidden_channels,
-            in_channels=info['input_channels'],
-            out_channels=info['output_channels']
-        )
+    # 使用核心库的 create_hybrid_fno 创建模型
+    # 修复: 不再使用自定义 MHFFNO1D (缺少激活函数)
+    model_mhf = create_hybrid_fno(
+        n_modes=n_modes_tuple,
+        hidden_channels=hidden_channels,
+        in_channels=info['input_channels'],
+        out_channels=info['output_channels'],
+        n_layers=3,
+        n_heads=4,
+        mhf_layers=[0, 2],  # 首尾层使用 MHF
+    )
     
     params_mhf = count_parameters(model_mhf)
     param_reduction = (1 - params_mhf / params_fno) * 100

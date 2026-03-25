@@ -28,6 +28,7 @@ MHF-FNO 多数据集基准测试
 
 import argparse
 import json
+import os
 import time
 from datetime import datetime
 from pathlib import Path
@@ -38,6 +39,11 @@ import torch
 import torch.nn as nn
 from neuralop.losses.data_losses import LpLoss
 from neuralop.models import FNO
+
+# ============================================================================
+# CPU 优化: 使用所有可用核心
+# ============================================================================
+torch.set_num_threads(os.cpu_count() or 1)
 
 # H5 支持
 try:
