@@ -37,151 +37,41 @@ except ImportError:
 
 
 # ============================================================================
-# MHF-FNO 核心实现
+# MHF-FNO 核心实现 (使用核心库)
 # ============================================================================
 
-class MHFSpectralConv(nn.Module):
-    """
-    Multi-Head Fourier Spectral Convolution
-    
-    将标准的频域卷积分解为多个头，每个头处理不同的频率子空间
-    """
-    
-    def __init__(self, in_channels, out_channels, n_modes, n_heads=4):
-        super().__init__()
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        self.n_modes = n_modes
-        self.n_heads = n_heads
-        
-        # 每个头的通道数
-        self.head_channels = out_channels // n_heads
-        
-        # 可学习的频域权重 (每个头独立) - 复数形式
-        # 使用实部和虚部分开存储
-        self.weight_real = nn.Parameter(
-            torch.randn(n_heads, self.head_channels, self.head_channels, *n_modes)
-        )
-        self.weight_imag = nn.Parameter(
-            torch.randn(n_heads, self.head_channels, self.head_channels, *n_modes)
-        )
-        
-        # 线性变换
-        self.fc = nn.Linear(in_channels, out_channels)
-        
-        # 初始化
-        self._init_weights()
-    
-    def _init_weights(self):
-        """尺度多样性初始化"""
-        with torch.no_grad():
-            for h in range(self.n_heads):
-                scale = 0.01 * (2 ** h)  # 不同头使用不同尺度
-                nn.init.normal_(self.weight_real[h], mean=0, std=scale)
-                nn.init.normal_(self.weight_imag[h], mean=0, std=scale)
-            nn.init.xavier_normal_(self.fc.weight)
-            nn.init.zeros_(self.fc.bias)
-    
-    def forward(self, x):
-        batch_size = x.shape[0]
-        
-        # FFT
-        x_ft = torch.fft.rfftn(x, dim=(-2, -1))
-        
-        # 多头处理
-        out_ft = torch.zeros(
-            batch_size, self.out_channels, *x_ft.shape[-2:],
-            dtype=x_ft.dtype, device=x.device
-        )
-        
-        for h in range(self.n_heads):
-            # 每个头处理对应的输入/输出通道
-            in_start = h * self.head_channels
-            in_end = in_start + self.head_channels
-            out_start = h * self.head_channels
-            out_end = out_start + self.head_channels
-            
-            # 频域卷积 (只处理低频部分)
-            modes_x = min(self.n_modes[0], x_ft.shape[-2])
-            modes_y = min(self.n_modes[1], x_ft.shape[-1])
-            
-            for i in range(modes_x):
-                for j in range(modes_y):
-                    # 复数乘法: (a+bi)(c+di) = (ac-bd) + (ad+bc)i
-                    x_real = x_ft[:, in_start:in_end, i, j].real
-                    x_imag = x_ft[:, in_start:in_end, i, j].imag
-                    w_real = self.weight_real[h, :, :, i, j]
-                    w_imag = self.weight_imag[h, :, :, i, j]
-                    
-                    # out = x @ w (复数矩阵乘法)
-                    out_real = torch.matmul(x_real, w_real) - torch.matmul(x_imag, w_imag)
-                    out_imag = torch.matmul(x_real, w_imag) + torch.matmul(x_imag, w_real)
-                    
-                    out_ft[:, out_start:out_end, i, j] = torch.complex(out_real, out_imag)
-        
-        # IFFT
-        x = torch.fft.irfftn(out_ft, dim=(-2, -1))
-        
-        # 线性变换
-        x = self.fc(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
-        
-        return x
+# 导入核心实现
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from mhf_fno import MHFSpectralConv, create_hybrid_fno
 
 
 class MHFFNO(nn.Module):
-    """MHF-FNO 模型"""
+    """
+    MHF-FNO 模型 (包装器)
+    
+    使用核心库的 create_hybrid_fno 创建模型，确保行为一致性。
+    """
     
     def __init__(self, n_modes, hidden_channels, in_channels, out_channels, 
                  n_layers=3, n_heads=4, mhf_layers=None):
         super().__init__()
         
-        self.n_layers = n_layers
-        self.hidden_channels = hidden_channels
-        
-        # 默认：第1层和最后一层使用 MHF
-        if mhf_layers is None:
-            mhf_layers = [0, n_layers - 1]
-        self.mhf_layers = set(mhf_layers)
-        
-        # 输入投影
-        self.fc_in = nn.Linear(in_channels, hidden_channels)
-        
-        # FNO 层 - 存储层配置
-        self.use_mhf_per_layer = []
-        self.fno_blocks = nn.ModuleList()
-        for i in range(n_layers):
-            use_mhf = i in self.mhf_layers
-            self.use_mhf_per_layer.append(use_mhf)
-            
-            if use_mhf:
-                conv = MHFSpectralConv(
-                    hidden_channels, hidden_channels, n_modes, n_heads
-                )
-            else:
-                conv = nn.Identity()
-            
-            self.fno_blocks.append(nn.ModuleDict({
-                'conv': conv,
-                'w': nn.Conv2d(hidden_channels, hidden_channels, 1),
-            }))
-        
-        # 输出投影
-        self.fc_out = nn.Linear(hidden_channels, out_channels)
+        # 使用核心库创建模型
+        self.model = create_hybrid_fno(
+            n_modes=n_modes,
+            hidden_channels=hidden_channels,
+            in_channels=in_channels,
+            out_channels=out_channels,
+            n_layers=n_layers,
+            n_heads=n_heads,
+            mhf_layers=mhf_layers
+        )
     
     def forward(self, x):
-        # 输入投影
-        x = self.fc_in(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
-        
-        # FNO 层
-        for i, block in enumerate(self.fno_blocks):
-            if self.use_mhf_per_layer[i]:
-                x = x + block['conv'](x)
-            x = x + block['w'](x)
-        
-        # 输出投影
-        x = self.fc_out(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
-        
-        return x
+        return self.model(x)
 
 
 # ============================================================================

@@ -1,0 +1,52 @@
+{
+  "timestamp": "2026-03-25T13:39:56.923918",
+  "config": {
+    "n_modes": [
+      12,
+      12
+    ],
+    "hidden_channels": 32,
+    "batch_size": 16,
+    "lr": 0.001,
+    "epochs": 50
+  },
+  "tests": {
+    "FNO": {
+      "params": 269041,
+      "best_loss": 0.05661244736984372,
+      "best_epoch": 21,
+      "time": 83.1533591747284,
+      "vs_fno": 0.0
+    },
+    "CoDA-[0,2]": {
+      "params": 140363,
+      "best_loss": 0.054498903919011354,
+      "best_epoch": 39,
+      "time": 80.60803008079529,
+      "vs_fno": -3.733354675562406
+    },
+    "CoDA-n_heads2": {
+      "params": 184227,
+      "best_loss": 0.05535978497937322,
+      "best_epoch": 38,
+      "time": 79.78426671028137,
+      "vs_fno": -2.2126978229486896
+    },
+    "CoDA-[0,1,2]": {
+      "params": 76024,
+      "best_loss": 0.06887188460677862,
+      "best_epoch": 50,
+      "time": 81.05322790145874,
+      "vs_fno": 21.65502077104204
+    },
+    "CoDA-n_heads2-full": {
+      "params": 141820,
+      "best_loss": 0.06436965661123395,
+      "best_epoch": 46,
+      "time": 80.2019054889679,
+      "vs_fno": 13.702303295091836
+    }
+  },
+  "iteration_1_best": -4.4,
+  "target_achieved": false
+}
