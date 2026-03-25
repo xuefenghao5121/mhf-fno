@@ -18,10 +18,10 @@ with open("requirements.txt", "r", encoding="utf-8") as fh:
 
 setup(
     name="mhf-fno",
-    version="1.1.0",
+    version="2.0.0",
     author="Tianyuan Team",
     author_email="tianyuan@example.com",
-    description="Multi-Head Fourier Neural Operator Plugin for NeuralOperator 2.0",
+    description="Multi-Head Fourier Neural Operator with Cross-Head Attention (CoDA)",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/xuefenghao5121/mhf-fno",

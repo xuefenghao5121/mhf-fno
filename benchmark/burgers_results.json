@@ -1,0 +1,17 @@
+{
+  "config": {
+    "n_train": 500,
+    "n_test": 100,
+    "epochs": 50,
+    "batch_size": 32,
+    "learning_rate": 0.001,
+    "seed": 42,
+    "data_format": "pt",
+    "data_path": null,
+    "resolution": null,
+    "viscosity": 0.001,
+    "n_steps": 100
+  },
+  "results": {},
+  "timestamp": "2026-03-25T20:56:19.693799"
+}

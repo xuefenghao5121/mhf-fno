@@ -1,7 +1,7 @@
 # MHF-FNO Dependencies
 # Core dependencies
 torch>=2.0.0
-neuralop>=2.0.0
+neuraloperator>=2.0.0
 numpy>=1.24.0
 
 # Optional but recommended
