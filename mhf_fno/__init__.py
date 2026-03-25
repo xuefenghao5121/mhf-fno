@@ -32,6 +32,7 @@ from .mhf_fno import (
     MHFSpectralConv, 
     create_hybrid_fno, 
     MHFFNO,
+    PINOLoss,
     get_device,
     check_cuda_memory
 )
@@ -51,6 +52,7 @@ __all__ = [
     "MHFSpectralConv", 
     "create_hybrid_fno", 
     "MHFFNO",
+    "PINOLoss",
     "get_device",
     "check_cuda_memory",
     # MHF-FNO 跨头注意力 (v1.2.0 新增)

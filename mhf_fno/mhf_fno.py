@@ -28,6 +28,7 @@ NeuralOperator 2.0.0 兼容的 MHF 插件实现。
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from typing import List, Tuple, Optional, Union
 import warnings
 
@@ -496,11 +497,131 @@ class MHFFNO:
         )
 
 
+class PINOLoss(nn.Module):
+    """
+    PINO (Physics-Informed Neural Operator) 损失函数
+
+    在标准数据损失基础上添加物理约束。
+
+    对于 NS 方程，这里实现一个简化版本，主要用于平滑性约束：
+        - 梯度平滑性: 鼓励解的空间平滑性
+        - Laplacian 约束: 惩罚过大的二阶导数
+
+    参数:
+        lambda_physics: 物理损失权重 λ，默认 0.01（降低以避免过约束）
+        smoothness_weight: 平滑性约束权重，默认 0.5
+
+    Example:
+        >>> pino_loss = PINOLoss(lambda_physics=0.01)
+        >>> loss = pino_loss(u_pred, u_true)
+    """
+
+    def __init__(self, lambda_physics: float = 0.01, smoothness_weight: float = 0.5):
+        """
+        初始化 PINO 损失函数。
+
+        Args:
+            lambda_physics: 物理约束权重，平衡数据损失和物理损失
+            smoothness_weight: 平滑性约束的权重
+        """
+        super().__init__()
+        self.lambda_phy = lambda_physics
+        self.smoothness_weight = smoothness_weight
+
+    def compute_smoothness_loss(self, u: torch.Tensor) -> torch.Tensor:
+        """
+        计算平滑性约束损失。
+
+        鼓励解的空间平滑性，惩罚过大的梯度。
+
+        Args:
+            u: 输入场 [B, C, H, W]
+
+        Returns:
+            torch.Tensor: 平滑性损失
+        """
+        # 一阶梯度
+        u_x = torch.gradient(u, dim=-1)[0]
+        u_y = torch.gradient(u, dim=-2)[0]
+
+        # 梯度幅值的平方
+        grad_norm_sq = u_x ** 2 + u_y ** 2
+
+        # 平滑性损失: 惩罚大梯度
+        smoothness_loss = grad_norm_sq.mean()
+
+        return smoothness_loss
+
+    def compute_laplacian_loss(self, u: torch.Tensor) -> torch.Tensor:
+        """
+        计算 Laplacian 约束损失。
+
+        惩罚过大的二阶导数，鼓励物理合理的解。
+
+        Args:
+            u: 输入场 [B, C, H, W]
+
+        Returns:
+            torch.Tensor: Laplacian 损失
+        """
+        # 二阶导数
+        u_x = torch.gradient(u, dim=-1)[0]
+        u_y = torch.gradient(u, dim=-2)[0]
+
+        u_xx = torch.gradient(u_x, dim=-1)[0]
+        u_yy = torch.gradient(u_y, dim=-2)[0]
+
+        # Laplacian
+        laplacian = u_xx + u_yy
+
+        # Laplacian 损失: 惩罚过大的二阶导数
+        laplacian_loss = (laplacian ** 2).mean()
+
+        return laplacian_loss
+
+    def forward(
+        self,
+        u_pred: torch.Tensor,
+        u_true: torch.Tensor,
+        u_prev: Optional[torch.Tensor] = None,
+        dt: Optional[float] = None
+    ) -> torch.Tensor:
+        """
+        计算 PINO 总损失。
+
+        Args:
+            u_pred: 模型预测 [B, C, H, W]
+            u_true: 真实值 [B, C, H, W]
+            u_prev: 上一时刻值（未使用，保持接口兼容）
+            dt: 时间步长（未使用，保持接口兼容）
+
+        Returns:
+            torch.Tensor: 总损失 = L_data + λ × L_physics
+        """
+        # 数据损失 (MSE)
+        L_data = F.mse_loss(u_pred, u_true)
+
+        # 平滑性约束
+        L_smooth = self.compute_smoothness_loss(u_pred)
+
+        # Laplacian 约束
+        L_laplacian = self.compute_laplacian_loss(u_pred)
+
+        # 物理损失 = 平滑性 + Laplacian
+        L_physics = self.smoothness_weight * L_smooth + (1 - self.smoothness_weight) * L_laplacian
+
+        # 总损失
+        total_loss = L_data + self.lambda_phy * L_physics
+
+        return total_loss
+
+
 # 导出公共 API
 __all__ = [
     'MHFSpectralConv', 
     'create_hybrid_fno', 
     'MHFFNO',
+    'PINOLoss',
     'get_device',
     'check_cuda_memory'
 ]

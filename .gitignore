@@ -20,38 +20,52 @@ wheels/
 .installed.cfg
 *.egg
 
-# Virtual environments
-venv/
-ENV/
-env/
+# Jupyter Notebook
+.ipynb_checkpoints
 
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# Jupyter
-.ipynb_checkpoints/
-
-# Data files (ignore large data, keep README)
+# Data files
 data/*.pt
-data/*.tgz
-data/*.tar.gz
-data/*/
+data/*.h5
+data/*.mat
 !data/README.md
 
-# NeuralOperator data cache
-.neuralop/
-
-# Model checkpoints
-*.ckpt
-*.pth
-*.pt
-
-# Logs
+# Results
+*.json
+!requirements.json
 *.log
+*.txt
+!README.txt
+!LICENSE.txt
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
 # OS
 .DS_Store
 Thumbs.db
+
+# Model checkpoints
+checkpoints/
+*.pth
+*.ckpt
+
+# TensorBoard
+runs/
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Paper notes (not for GitHub)
+docs/paper-notes/
+!docs/paper-notes/.gitkeep
+
+# Config files with sensitive info
+config.local.*
+.env
