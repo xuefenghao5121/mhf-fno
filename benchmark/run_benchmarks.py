@@ -3,14 +3,24 @@
 MHF-FNO 多数据集基准测试
 
 支持多种数据格式:
-- PT 格式 (NeuralOperator 内置)
+- PT 格式 (NeuralOperator 内置 或 本地生成)
 - H5 格式 (PDEBench 数据集)
 
 使用方法:
+    # 使用内置数据
     python run_benchmarks.py --dataset darcy
+    
+    # 使用本地生成的数据 (自动解析分辨率)
+    python run_benchmarks.py --dataset darcy --data_path ./data/darcy_train_16.pt
+    
+    # 指定分辨率
+    python run_benchmarks.py --dataset darcy --resolution 32
+    
+    # H5 格式
     python run_benchmarks.py --dataset darcy --format h5 --data_path ./data/2D_DarcyFlow_Train.h5
-    python run_benchmarks.py --dataset burgers
-    python run_benchmarks.py --dataset all
+    
+    # Navier-Stokes with viscosity and steps
+    python run_benchmarks.py --dataset navier_stokes --resolution 64 --viscosity 1e-3 --n_steps 100
 
 依赖:
     pip install neuralop torch numpy h5py
@@ -21,6 +31,7 @@ import json
 import time
 from datetime import datetime
 from pathlib import Path
+import re
 
 import numpy as np
 import torch
@@ -34,6 +45,59 @@ try:
     HAS_H5PY = True
 except ImportError:
     HAS_H5PY = False
+
+
+# ============================================================================
+# 辅助函数: 从数据文件解析分辨率
+# ============================================================================
+
+def parse_resolution_from_filename(filename: str) -> int:
+    """
+    从文件名解析分辨率。
+    
+    支持的命名格式:
+    - darcy_train_16.pt -> 16
+    - ns_train_64.pt -> 64
+    - burgers_train_1024.pt -> 1024
+    - darcy_test_32_large.pt -> 32
+    
+    Args:
+        filename: 文件名 (不含路径)
+    
+    Returns:
+        int: 解析出的分辨率，如果无法解析返回默认值 16
+    """
+    # 尝试匹配常见模式: _数字.pt 或 _数字_
+    match = re.search(r'_(\d+)(?:_|\.pt$)', filename)
+    if match:
+        return int(match.group(1))
+    
+    # 默认返回 16
+    print(f"⚠️  无法从文件名 '{filename}' 解析分辨率，使用默认值 16")
+    return 16
+
+
+def parse_resolution_from_tensor(tensor: torch.Tensor) -> tuple:
+    """
+    从张量形状解析分辨率。
+    
+    Args:
+        tensor: 数据张量 [N, C, H, W] 或 [N, C, L]
+    
+    Returns:
+        tuple: (分辨率, 维度)
+            - 2D: (H, '2d') 其中 H=W
+            - 1D: (L, '1d')
+    """
+    if tensor.dim() == 4:  # [N, C, H, W]
+        H, W = tensor.shape[-2], tensor.shape[-1]
+        if H == W:
+            return (H, '2d')
+        return ((H, W), '2d')
+    elif tensor.dim() == 3:  # [N, C, L]
+        return (tensor.shape[-1], '1d')
+    else:
+        raise ValueError(f"不支持的张量维度: {tensor.dim()}")
 
 
 # ============================================================================
@@ -199,25 +263,128 @@ def load_h5_navier_stokes(h5_path, n_train=1000, n_test=200, resolution=None):
     return train_x, train_y, test_x, test_y, info
 
 
-def load_darcy_flow(n_train=1000, n_test=200, resolution=16, data_format='pt', data_path=None):
-    """加载 Darcy Flow 数据集"""
-    print(f"\n📊 加载 Darcy Flow ({resolution}x{resolution})...")
+def load_darcy_flow(n_train=1000, n_test=200, resolution=None, data_format='pt', data_path=None):
+    """
+    加载 Darcy Flow 数据集
     
+    支持三种模式:
+    1. 本地 PT 文件: data_path 指向具体的 .pt 文件
+    2. 内置数据: data_path 为 None，使用 NeuralOperator 内置数据
+    3. H5 文件: data_format='h5'
+    
+    Args:
+        n_train: 训练样本数
+        n_test: 测试样本数
+        resolution: 空间分辨率 (如果为 None，从文件名或张量形状推断)
+        data_format: 数据格式 ('pt' 或 'h5')
+        data_path: 数据文件路径
+    """
     # H5 格式
     if data_format == 'h5' and data_path:
         return load_h5_darcy(data_path, n_train, n_test, resolution)
     
-    # PT 格式 (默认)
-    
+    # PT 格式 (本地文件优先)
     try:
-        import torch
         from pathlib import Path
         
-        # 直接加载内置数据
-        data_path = Path('/usr/local/lib/python3.11/site-packages/neuralop/data/datasets/data/')
+        # 情况 1: 指定了本地 PT 文件
+        if data_path and Path(data_path).exists():
+            print(f"\n📊 从本地文件加载 Darcy Flow: {data_path}")
+            
+            # 解析分辨率
+            if resolution is None:
+                resolution = parse_resolution_from_filename(Path(data_path).name)
+                print(f"   从文件名解析分辨率: {resolution}")
+            
+            # 加载数据
+            data = torch.load(data_path, weights_only=False)
+            
+            # 处理数据格式
+            if isinstance(data, dict):
+                train_x = data.get('x', data.get('train_x'))
+                train_y = data.get('y', data.get('train_y'))
+            else:
+                # 假设是元组或列表
+                train_x, train_y = data[0], data[1]
+            
+            # 确保维度正确
+            if train_x.dim() == 3:  # [N, H, W]
+                train_x = train_x.unsqueeze(1)  # [N, 1, H, W]
+                train_y = train_y.unsqueeze(1)
+            
+            # 转换为 float
+            train_x = train_x.float()
+            train_y = train_y.float()
+            
+            # 确定测试文件路径
+            test_path = data_path.replace('train', 'test')
+            if Path(test_path).exists():
+                test_data = torch.load(test_path, weights_only=False)
+                if isinstance(test_data, dict):
+                    test_x = test_data.get('x', test_data.get('test_x'))
+                    test_y = test_data.get('y', test_data.get('test_y'))
+                else:
+                    test_x, test_y = test_data[0], test_data[1]
+                
+                if test_x.dim() == 3:
+                    test_x = test_x.unsqueeze(1)
+                    test_y = test_y.unsqueeze(1)
+                test_x = test_x.float()
+                test_y = test_y.float()
+            else:
+                # 从训练数据分割
+                print(f"   测试文件不存在，从训练数据分割")
+                split_idx = int(len(train_x) * 0.8)
+                test_x = train_x[split_idx:split_idx+n_test]
+                test_y = train_y[split_idx:split_idx+n_test]
+                train_x = train_x[:n_train]
+                train_y = train_y[:n_train]
+            
+            # 限制样本数
+            train_x = train_x[:n_train]
+            train_y = train_y[:n_train]
+            test_x = test_x[:n_test]
+            test_y = test_y[:n_test]
+            
+            # 更新分辨率
+            actual_resolution = train_x.shape[-1]
+            if resolution != actual_resolution:
+                print(f"   实际分辨率: {actual_resolution}x{actual_resolution}")
+                resolution = actual_resolution
+            
+            info = {
+                'name': 'Darcy Flow (本地)',
+                'resolution': f'{resolution}x{resolution}',
+                'n_train': train_x.shape[0],
+                'n_test': test_x.shape[0],
+                'input_channels': train_x.shape[1],
+                'output_channels': train_y.shape[1],
+                'n_modes': (resolution // 2, resolution // 2),
+            }
+            
+            print(f"✅ 加载成功: 训练 {train_x.shape[0]}, 测试 {test_x.shape[0]}")
+            return train_x, train_y, test_x, test_y, info
         
-        if not (data_path / 'darcy_train_16.pt').exists():
-            # 如果没有内置数据，使用 API 下载
+        # 情况 2: 使用 NeuralOperator 内置数据
+        if resolution is None:
+            resolution = 16  # 默认分辨率
+        
+        print(f"\n📊 加载 Darcy Flow ({resolution}x{resolution}) [NeuralOperator 内置]...")
+        
+        # 尝试加载内置数据
+        builtin_path = Path('/usr/local/lib/python3.11/site-packages/neuralop/data/datasets/data/')
+        
+        if (builtin_path / f'darcy_train_{resolution}.pt').exists():
+            # 使用内置数据
+            train_data = torch.load(builtin_path / f'darcy_train_{resolution}.pt', weights_only=False)
+            test_data = torch.load(builtin_path / f'darcy_test_{resolution}.pt', weights_only=False)
+            
+            train_x = train_data['x'].unsqueeze(1).float()
+            train_y = train_data['y'].unsqueeze(1).float()
+            test_x = test_data['x'].unsqueeze(1).float()
+            test_y = test_data['y'].unsqueeze(1).float()
+        else:
+            # 使用 API 下载
             from neuralop.data.datasets import load_darcy_flow_small
             train_loader, test_loader, _ = load_darcy_flow_small(
                 n_train=n_train,
@@ -231,21 +398,12 @@ def load_darcy_flow(n_train=1000, n_test=200, resolution=16, data_format='pt', d
             train_y = train_batch['y']
             test_x = test_batch['x']
             test_y = test_batch['y']
-        else:
-            # 使用内置数据
-            train_data = torch.load(data_path / 'darcy_train_16.pt', weights_only=False)
-            test_data = torch.load(data_path / 'darcy_test_16.pt', weights_only=False)
-            
-            train_x = train_data['x'].unsqueeze(1).float()  # 添加 channel 维度
-            train_y = train_data['y'].unsqueeze(1).float()
-            test_x = test_data['x'].unsqueeze(1).float()
-            test_y = test_data['y'].unsqueeze(1).float()
-            
-            # 限制样本数
-            train_x = train_x[:n_train]
-            train_y = train_y[:n_train]
-            test_x = test_x[:n_test]
-            test_y = test_y[:n_test]
+        
+        # 限制样本数
+        train_x = train_x[:n_train]
+        train_y = train_y[:n_train]
+        test_x = test_x[:n_test]
+        test_y = test_y[:n_test]
         
         info = {
             'name': 'Darcy Flow',
@@ -462,6 +620,7 @@ def run_benchmark(dataset_name, config):
         data = load_darcy_flow(
             n_train=config['n_train'],
             n_test=config['n_test'],
+            resolution=config.get('resolution'),
             data_format=config.get('data_format', 'pt'),
             data_path=config.get('data_path'),
         )
@@ -474,6 +633,7 @@ def run_benchmark(dataset_name, config):
         data = load_navier_stokes(
             n_train=config['n_train'],
             n_test=config['n_test'],
+            resolution=config.get('resolution', 64),
         )
     else:
         print(f"❌ 未知数据集: {dataset_name}")
@@ -592,9 +752,17 @@ def main():
                        help='数据集选择')
     parser.add_argument('--format', type=str, default='pt',
                        choices=['pt', 'h5'],
-                       help='数据格式 (pt=NeuralOperator内置, h5=PDEBench)')
+                       help='数据格式 (pt=NeuralOperator内置或本地文件, h5=PDEBench)')
     parser.add_argument('--data_path', type=str, default=None,
-                       help='H5 数据文件路径 (format=h5 时需要)')
+                       help='数据文件路径 (支持 PT 和 H5 格式)')
+    # 新增参数: 分辨率、粘度、时间步数
+    parser.add_argument('--resolution', type=int, default=None,
+                       help='空间分辨率 (Darcy/Navier-Stokes), 默认从文件推断或使用 16')
+    parser.add_argument('--viscosity', type=float, default=1e-3,
+                       help='粘性系数 (Navier-Stokes)')
+    parser.add_argument('--n_steps', type=int, default=100,
+                       help='时间步数 (Navier-Stokes)')
+    # 其他参数
     parser.add_argument('--n_train', type=int, default=1000, help='训练集大小')
     parser.add_argument('--n_test', type=int, default=200, help='测试集大小')
     parser.add_argument('--epochs', type=int, default=50, help='训练轮数')
@@ -615,6 +783,9 @@ def main():
         'seed': args.seed,
         'data_format': args.format,
         'data_path': args.data_path,
+        'resolution': args.resolution,
+        'viscosity': args.viscosity,
+        'n_steps': args.n_steps,
     }
     
     print("="*60)

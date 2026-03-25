@@ -682,8 +682,9 @@ def main():
                        help='粘性系数')
     parser.add_argument('--n_steps', type=int, default=100,
                        help='时间步数 (Navier-Stokes)')
-    parser.add_argument('--output_dir', type=str, default='./data',
-                       help='输出目录')
+    # 修复: 使用项目根目录的绝对路径
+    parser.add_argument('--output_dir', type=str, default=None,
+                       help='输出目录 (默认: 项目根目录下的 data/)')
     parser.add_argument('--device', type=str, default='cpu',
                        choices=['cpu', 'cuda'],
                        help='计算设备')
@@ -694,6 +695,13 @@ def main():
     # 设置随机种子
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
+    
+    # 修复: 如果未指定 output_dir，使用项目根目录的 data/ 文件夹
+    if args.output_dir is None:
+        # 获取项目根目录 (脚本所在目录的父目录)
+        project_root = Path(__file__).parent.parent.resolve()
+        args.output_dir = str(project_root / 'data')
+        print(f"ℹ️  使用默认输出目录: {args.output_dir}")
     
     print("="*60)
     print("MHF-FNO 数据生成")
