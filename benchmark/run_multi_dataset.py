@@ -26,7 +26,7 @@ from neuralop.models import FNO
 
 # 导入 MHF-FNO 核心库
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from mhf_fno import MHFFNO, MHFFNOWithAttention
+from mhf_fno import MHFFNO, MHFFNOWithAttention, create_hybrid_fno
 
 
 # ============================================================================
@@ -82,6 +82,10 @@ class MHFFNO1D(nn.Module):
         
         self.fc_in = nn.Linear(in_channels, hidden_channels)
         self.layers = nn.ModuleList()
+        
+        # 确保 n_modes 是元组
+        if isinstance(n_modes, int):
+            n_modes = (n_modes,)
         
         for i in range(n_layers):
             conv = MHFSpectralConv(
@@ -275,13 +279,12 @@ def run_single_dataset(dataset_name, train_path, test_path, config):
             n_heads=4,
         )
     else:
-        model_mhf = MHFFNO(
+        # 使用 MHFFNO 工厂类创建模型
+        model_mhf = MHFFNO.best_config(
             n_modes=n_modes_tuple,
             hidden_channels=hidden_channels,
             in_channels=info['input_channels'],
-            out_channels=info['output_channels'],
-            n_layers=3,
-            n_heads=4,
+            out_channels=info['output_channels']
         )
     
     params_mhf = count_parameters(model_mhf)
