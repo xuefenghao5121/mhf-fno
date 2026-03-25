@@ -339,7 +339,8 @@ def create_mhf_fno_with_attention(
     mhf_layers: Optional[List[int]] = None,
     n_heads: int = 4,
     attention_layers: Optional[List[int]] = None,
-    attn_dropout: float = 0.0
+    attn_dropout: float = 0.0,
+    positional_embedding: Optional[str] = 'grid'
 ) -> FNO:
     """
     创建带跨头注意力的 MHF-FNO 模型。
@@ -354,6 +355,7 @@ def create_mhf_fno_with_attention(
         n_heads: 多头数量，默认 4
         attention_layers: 使用注意力的层索引列表，默认与 mhf_layers 相同
         attn_dropout: 注意力 dropout 概率，默认 0.0
+        positional_embedding: 位置嵌入类型，默认 'grid'，1D 数据建议设为 None
         
     Returns:
         FNO: 配置好的带注意力的 MHF-FNO 模型
@@ -378,7 +380,8 @@ def create_mhf_fno_with_attention(
         hidden_channels=hidden_channels,
         in_channels=in_channels,
         out_channels=out_channels,
-        n_layers=n_layers
+        n_layers=n_layers,
+        positional_embedding=positional_embedding
     )
     
     # 替换指定层的卷积为带注意力的 MHF
@@ -419,7 +422,8 @@ class MHFFNOWithAttention:
         in_channels: int = 1,
         out_channels: int = 1,
         n_heads: int = 4,
-        attn_dropout: float = 0.0
+        attn_dropout: float = 0.0,
+        positional_embedding: Optional[str] = 'grid'
     ) -> FNO:
         """
         最佳配置预设: 首尾层使用带注意力的 MHF。
@@ -431,6 +435,7 @@ class MHFFNOWithAttention:
             out_channels: 输出通道数，默认 1
             n_heads: 多头数量，默认 4
             attn_dropout: 注意力 dropout 概率，默认 0.0
+            positional_embedding: 位置嵌入类型，默认 'grid'，1D 数据建议设为 None
             
         Returns:
             FNO: 配置好的带注意力的 MHF-FNO 模型
@@ -443,7 +448,8 @@ class MHFFNOWithAttention:
             mhf_layers=[0, 2],
             n_heads=n_heads,
             attention_layers=[0, 2],
-            attn_dropout=attn_dropout
+            attn_dropout=attn_dropout,
+            positional_embedding=positional_embedding
         )
     
     @staticmethod

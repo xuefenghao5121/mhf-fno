@@ -352,7 +352,8 @@ def create_hybrid_fno(
     out_channels: int = 1,
     n_layers: int = 3,
     mhf_layers: Optional[List[int]] = None,
-    n_heads: int = 4
+    n_heads: int = 4,
+    positional_embedding: Optional[str] = 'grid'
 ) -> FNO:
     """
     创建混合 FNO 模型（推荐使用）。
@@ -368,6 +369,7 @@ def create_hybrid_fno(
         n_layers: FNO 层数，默认 3
         mhf_layers: 使用 MHF 的层索引列表，默认 [0, 2]（首尾层）
         n_heads: 多头数量，默认 4
+        positional_embedding: 位置嵌入类型，默认 'grid'，1D 数据建议设为 None
         
     Returns:
         FNO: 配置好的混合 FNO 模型
@@ -400,7 +402,8 @@ def create_hybrid_fno(
         hidden_channels=hidden_channels,
         in_channels=in_channels,
         out_channels=out_channels,
-        n_layers=n_layers
+        n_layers=n_layers,
+        positional_embedding=positional_embedding
     )
     
     # 替换指定层的卷积为 MHF
