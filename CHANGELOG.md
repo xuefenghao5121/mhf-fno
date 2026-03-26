@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.4] - 2026-03-26
+
+### Fixed
+- **Critical IndexError in resolution extraction**: Fixed `IndexError: Tuple index out of range` when extracting resolution from filenames
+  - **Root cause**: Regular expression only defined one capture group, but code tried to access group(2) for height
+  - **Impact**: Happened on files like `ns_train_32.pt` with single dimension notation
+  - **Solution**: Complete rewrite of resolution extraction algorithm:
+    - First matches `NxN` format with two capture groups
+    - Fallback to single dimension format (square image)
+    - Proper error handling with safe default (4096, 4096) when no number found
+    - Never crashes, always returns a valid resolution
+
 ## [1.3.3] - 2026-03-26
 
 ### Fixed
@@ -123,6 +135,7 @@ python run_benchmarks.py \
 
 | Version | Date | Key Features | Notes |
 |---------|------|--------------|-------|
+| **1.3.4** | **2026-03-26** | **Critical IndexError fix in resolution extraction** | Fix regex capture group mismatch, complete algorithm rewrite ✅ |
 | **1.3.3** | **2026-03-26** | **H5 loading bug fixes** | Fix H5 group access and resolution extraction ✅ |
 | **1.3.2** | **2026-03-26** | **H5 file parsing bug fix** | Fix incorrect data key lookup for Zenodo datasets ✅ |
 | **1.3.1** | **2026-03-26** | **Documentation cleanup + English README** | Clean commercial release ✨ |
