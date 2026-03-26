@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.5] - 2026-03-26
+
+### Fixed
+- **Missing channel dimension bug in 1D PT single file loading**: Fixed shape mismatch error when loading 1D data from PT single file format
+  - **Root cause**: `load_pt_single_file` only handled channel dimension addition for 2D data (`x.ndim == 3`), but **forgot to handle 1D data** (`x.ndim == 2`)
+  - **Impact**: When loading 1D Burgers data from PT file, the channel dimension was missing, resulting in wrong tensor shape `[N, L]` instead of `[N, 1, L]`. This caused input channel dimension calculation to be wrong (`input_channels = L` instead of `1`), leading to shape mismatch error during model forward pass.
+  - **Solution**: Added `elif x.ndim == 2` handling to add the missing channel dimension
+  - **Also improved**: Hyphenated number matching in `parse_resolution_from_filename` to match numbers at start (`128-file.h5`) or end (`file-128.h5`) of filename
+
 ## [1.3.4] - 2026-03-26
 
 ### Fixed
@@ -135,6 +144,7 @@ python run_benchmarks.py \
 
 | Version | Date | Key Features | Notes |
 |---------|------|--------------|-------|
+| **1.3.5** | **2026-03-26** | **Missing channel dimension bug fix (1D PT single file)** | Fix shape mismatch when loading 1D Burgers data ✅ |
 | **1.3.4** | **2026-03-26** | **Critical IndexError fix in resolution extraction** | Fix regex capture group mismatch, complete algorithm rewrite ✅ |
 | **1.3.3** | **2026-03-26** | **H5 loading bug fixes** | Fix H5 group access and resolution extraction ✅ |
 | **1.3.2** | **2026-03-26** | **H5 file parsing bug fix** | Fix incorrect data key lookup for Zenodo datasets ✅ |

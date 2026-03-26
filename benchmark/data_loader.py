@@ -100,7 +100,8 @@ def parse_resolution_from_filename(filename: str) -> int:
                 continue
     
     # 优先级 3: 匹配连字符分隔的纯数字
-    all_matches_hyphen = list(re.finditer(r'-(\d+)-', filename, re.IGNORECASE))
+    # 匹配 "-数字" 或 "数字-" 或 "-数字-"
+    all_matches_hyphen = list(re.finditer(r'(?:^|-)(\d+)(?:$|-)', filename, re.IGNORECASE))
     for match in all_matches_hyphen:
         if match.lastindex >= 1:
             try:
@@ -764,7 +765,10 @@ def load_pt_single_file(pt_path, n_train=1000, n_test=200, resolution=None):
     y = y.float()
     
     # 添加 channel 维度
-    if x.ndim == 3:  # [N, H, W]
+    if x.ndim == 3:  # [N, H, W] -> 2D，没有 channel 维度
+        x = x.unsqueeze(1)
+        y = y.unsqueeze(1)
+    elif x.ndim == 2:  # [N, L] -> 1D，没有 channel 维度
         x = x.unsqueeze(1)
         y = y.unsqueeze(1)
     
