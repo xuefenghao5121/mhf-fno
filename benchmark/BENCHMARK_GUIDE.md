@@ -106,7 +106,9 @@ python run_benchmarks.py --dataset darcy
 python run_benchmarks.py --dataset burgers
 ```
 
-### H5 格式（PDEBench）
+### H5 格式
+
+#### 单文件 H5 (PDEBench 原格式)
 
 ```bash
 cd benchmark
@@ -118,6 +120,43 @@ wget -O ../data/2D_DarcyFlow_Train.h5 https://darus.uni-stuttgart.de/api/access/
 python run_benchmarks.py --dataset darcy --format h5 \
     --data_path ../data/2D_DarcyFlow_Train.h5
 ```
+
+#### 双文件 H5 (Zenodo 格式，训练集测试集分开) ✨ **新增**
+
+你从 https://zenodo.org/records/13355846 下载的数据集是训练集和测试集分开的两个文件，可以这样运行：
+
+```bash
+cd benchmark
+
+# 假设你已经下载了:
+#   data/1D_Burgers_Re1000_Train.h5
+#   data/1D_Burgers_Re1000_Test.h5
+#   data/2D_NS_Re100_Train.h5
+#   data/2D_NS_Re100_Test.h5
+
+# Burgers 1D
+python run_benchmarks.py --dataset burgers --format h5 \
+    --train_path ../data/1D_Burgers_Re1000_Train.h5 \
+    --test_path ../data/1D_Burgers_Re1000_Test.h5
+
+# Navier-Stokes 2D
+python run_benchmarks.py --dataset navier_stokes --format h5 \
+    --train_path ../data/2D_NS_Re100_Train.h5 \
+    --test_path ../data/2D_NS_Re100_Test.h5
+
+# Darcy Flow 2D
+python run_benchmarks.py --dataset darcy --format h5 \
+    --train_path ../data/2D_DarcyFlow_Train.h5 \
+    --test_path ../data/2D_DarcyFlow_Test.h5
+```
+
+**Zenodo 下载地址**: https://zenodo.org/records/13355846
+
+| 数据集 | 文件名 |
+|--------|--------|
+| Burgers 1D | `1D_Burgers_Re1000_Train.h5` + `1D_Burgers_Re1000_Test.h5` |
+| Navier-Stokes 2D | `2D_NS_Re100_Train.h5` + `2D_NS_Re100_Test.h5` |
+| Darcy Flow 2D | `2D_DarcyFlow_Train.h5` + `2D_DarcyFlow_Test.h5` |
 
 ### 自定义参数
 
