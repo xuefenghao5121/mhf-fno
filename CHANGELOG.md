@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.2] - 2026-03-26
+
+### Fixed
+- **H5 file parsing bug**: Fixed incorrect data key parsing in H5 format for Zenodo datasets
+  - The issue caused wrong tensor shape when reading Navier-Stokes data from Zenodo H5 files
+  - Corrected key lookup to match the actual data format in the downloaded files
+  - Now fully supports all H5 formats: single file (PDEBench) and double file (Zenodo)
+
 ## [1.3.1] - 2026-03-26
 
 ### Changed
@@ -102,6 +110,7 @@ python run_benchmarks.py \
 
 | Version | Date | Key Features | Notes |
 |---------|------|--------------|-------|
+| **1.3.2** | **2026-03-26** | **H5 file parsing bug fix** | Fix incorrect data key lookup for Zenodo datasets ✅ |
 | **1.3.1** | **2026-03-26** | **Documentation cleanup + English README** | Clean commercial release ✨ |
 | **1.3.0** | **2026-03-26** | **Zenodo H5 double file support + Universal data loader** | Ready for external dataset validation |
 | 1.2.0 | 2026-03-26 | PINO + Real NS Data | +36% accuracy improvement (NS+PINO) |
