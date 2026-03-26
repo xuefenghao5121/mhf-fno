@@ -69,3 +69,16 @@ docs/paper-notes/
 # Config files with sensitive info
 config.local.*
 .env
+
+# Model checkpoints
+examples/checkpoints/
+*.pth
+*.ckpt
+
+# Team memory files (local)
+MEMORY.md
+*.log
+
+# Benchmark temporary files
+benchmark/test_*.log
+benchmark/tmp_*.py
