@@ -83,3 +83,21 @@ MEMORY.md
 benchmark/test_*.log
 benchmark/tmp_*.py
 benchmark/data/ns_real_velocity.pt
+
+# Research documents (local only, not for GitHub)
+*_REPORT.md
+*_SUMMARY.md
+*_NOTES.md
+*_DIAGNOSIS.md
+*_OPTIMIZATION*.md
+*_ANALYSIS.md
+docs/paper-notes/*.md
+!docs/paper-notes/.gitkeep
+
+# Keep only essential docs for GitHub
+!README.md
+!QUICK_START.md
+!CHANGELOG.md
+!CONTRIBUTING.md
+!LICENSE
+!TIANYUAN_CONFIG.md
