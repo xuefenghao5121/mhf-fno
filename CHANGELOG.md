@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.8] - 2026-03-27
+
+### Fixed
+- **Critical bug: 1D data loading completely fails in all PT formats**: Fixed missing channel dimension addition in 1D data
+  - **Root cause**: Both `load_pt_single_file` and `load_pt_two_files` only handled channel dimension addition for 2D data (`x.ndim == 3`), **completely forgot about 1D data** (`x.ndim == 2`)
+  - **Impact**: 1D Burgers data loading completely fails because the channel dimension was missing
+  - **Solution**: Added explicit `elif x.ndim == 2` handling for both loading functions to add the missing channel dimension
+  - **Now verified**:
+    - ✅ 1D PT single file: `[N, L]` → `[N, 1, L]` (correct)
+    - ✅ 1D PT double files: `[N, L]` → `[N, 1, L]` (correct)
+    - ✅ 2D PT single file: `[N, H, W]` → `[N, 1, H, W]` (correct, unchanged)
+    - ✅ 2D PT double files: `[N, H, W]` → `[N, 1, H, W]` (correct, unchanged)
+  - **All combinations now work correctly!**
+
 ## [1.3.7] - 2026-03-27
 
 ### Fixed
@@ -178,6 +192,7 @@ python run_benchmarks.py \
 
 | Version | Date | Key Features | Notes |
 |---------|------|--------------|-------|
+| **1.3.8** | **2026-03-27** | **Critical bug: 1D data loading completely fails in all PT formats** | Fixed missing channel dimension addition for 1D data ✅ |
 | **1.3.7** | **2026-03-27** | **Full line-by-line review of `data_loader.py` - complete bugfix pass** | All combinations verified working ✅ |
 | **1.3.6** | **2026-03-26** | **Complete channel dimension handling fix for all PT formats** | All 1D/2D combinations now work correctly ✅ |
 | **1.3.5** | **2026-03-26** | **Missing channel dimension bug fix (1D PT single file)** | Fix shape mismatch when loading 1D Burgers data ✅ |
