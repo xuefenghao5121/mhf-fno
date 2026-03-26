@@ -177,12 +177,19 @@ def adjust_resolution(data, target_resolution, is_2d=True):
     if target_resolution is None:
         return data
     
-    if data.ndim >= 3:  # 至少有 batch, channel, ...
-        current_h = data.shape[-2] if is_2d else data.shape[-1]
-        if is_2d and current_h == target_resolution:
-            return data
-        if not is_2d and current_h == target_resolution:
-            return data
+    # 获取当前分辨率
+    if is_2d:
+        if data.ndim < 3:
+            raise ValueError(f"2D数据至少需要3个维度 [N, H, W]，但得到 {data.ndim} 维，形状: {data.shape}")
+        current_res = data.shape[-2]
+    else:
+        if data.ndim < 2:
+            raise ValueError(f"1D数据至少需要2个维度 [N, L]，但得到 {data.ndim} 维，形状: {data.shape}")
+        current_res = data.shape[-1]
+    
+    # 如果已经是目标分辨率，直接返回
+    if current_res == target_resolution:
+        return data
     
     # 使用插值调整
     if is_2d:
@@ -242,6 +249,9 @@ def find_first_dataset(obj):
         return obj
     
     if isinstance(obj, h5py.Group):
+        # 检查group是否有keys
+        if len(obj.keys()) == 0:
+            raise ValueError(f"空 group '{obj.name}' 中找不到 dataset")
         for key in obj.keys():
             try:
                 result = find_first_dataset(obj[key])
@@ -250,6 +260,7 @@ def find_first_dataset(obj):
             except ValueError:
                 continue
     
+    # 如果走到这里，说明遍历完所有都没找到
     raise ValueError("在 H5 文件中找不到任何 dataset")
 
 
@@ -263,8 +274,9 @@ def find_all_datasets(obj, result_list=None):
         return result_list
     
     if isinstance(obj, h5py.Group):
-        for key in obj.keys():
-            find_all_datasets(obj[key], result_list)
+        if len(obj.keys()) > 0:
+            for key in obj.keys():
+                find_all_datasets(obj[key], result_list)
     
     return result_list
 
@@ -303,12 +315,16 @@ def load_h5_single_file(h5_path, n_train=1000, n_test=200, resolution=None, is_2
                 # tensor is a group, find first dataset inside
                 ds = find_first_dataset(f['tensor'])
                 data = ds[:]
+            if data is not None and data.shape[0] == 0:
+                raise ValueError(f"在文件 {h5_path} 中 tensor 数据集是空的")
         elif 'data' in f:
             if isinstance(f['data'], h5py.Dataset):
                 data = f['data'][:]
             else:
                 ds = find_first_dataset(f['data'])
                 data = ds[:]
+            if data is not None and data.shape[0] == 0:
+                raise ValueError(f"在文件 {h5_path} 中 data 数据集是空的")
         elif 'x' in f and 'y' in f:
             # PDEBench 有些分开存储
             if isinstance(f['x'], h5py.Dataset):
@@ -320,11 +336,18 @@ def load_h5_single_file(h5_path, n_train=1000, n_test=200, resolution=None, is_2
                 ds_y = find_first_dataset(f['y'])
                 x_data = ds_x[:]
                 y_data = ds_y[:]
+            # 检查数据不为空
+            if x_data is None or x_data.shape[0] == 0:
+                raise ValueError(f"在文件 {h5_path} 中 x 数据集是空的")
+            if y_data is None or y_data.shape[0] == 0:
+                raise ValueError(f"在文件 {h5_path} 中 y 数据集是空的")
             data = None
         else:
             # 尝试找到第一个 dataset (跳过 groups)
             all_datasets = find_all_datasets(f)
             if len(all_datasets) > 0:
+                if all_datasets[0].shape[0] == 0:
+                    raise ValueError(f"在文件 {h5_path} 中第一个 dataset 是空的")
                 data = all_datasets[0][:]
             else:
                 raise ValueError(f"在文件 {h5_path} 中找不到可用的 dataset，所有键: {list(f.keys())}")
@@ -352,7 +375,16 @@ def load_h5_single_file(h5_path, n_train=1000, n_test=200, resolution=None, is_2
             x_data = x_data.unsqueeze(1)
             y_data = y_data.unsqueeze(1)
     
-    # 分割训练测试
+    # 分割训练测试 - 添加边界检查
+    if x_data.shape[0] < n_train + n_test:
+        available = x_data.shape[0]
+        print(f"⚠️  警告: 请求总共 {n_train + n_test} 个样本，但文件只有 {available} 个，调整分割比例")
+        if available <= n_train:
+            n_train = available
+            n_test = 0
+        else:
+            n_test = available - n_train
+    
     train_x = x_data[:n_train]
     train_y = y_data[:n_train]
     test_x = x_data[n_train:n_train+n_test]
@@ -447,9 +479,11 @@ def load_h5_two_files(train_h5_path, test_h5_path, n_train=1000, n_test=200, res
             # 找到第一个 dataset (跳过 groups)
             all_datasets = find_all_datasets(f)
             if len(all_datasets) > 0:
+                if all_datasets[0].shape[0] == 0:
+                    raise ValueError(f"在文件 {train_h5_path} 中第一个 dataset 是空的")
                 train_x_np = all_datasets[0][:]
             else:
-                raise ValueError(f"在文件 {train_h5_path} 中找不到可用的 dataset")
+                raise ValueError(f"在文件 {train_h5_path} 中找不到可用的 dataset，所有键: {list(f.keys())}")
         
         if 'y' in f:
             if isinstance(f['y'], h5py.Dataset):
@@ -467,9 +501,13 @@ def load_h5_two_files(train_h5_path, test_h5_path, n_train=1000, n_test=200, res
             # 尝试找到第二个 dataset
             all_datasets = find_all_datasets(f)
             if len(all_datasets) >= 2:
+                if all_datasets[1].shape[0] == 0:
+                    raise ValueError(f"在文件 {train_h5_path} 中第二个 dataset 是空的")
                 train_y_np = all_datasets[1][:]
             else:
-                # 分割
+                # 分割 - 添加检查确保至少有2个样本
+                if train_x_np.shape[0] < 2:
+                    raise ValueError(f"在文件 {train_h5_path} 中只有 {train_x_np.shape[0]} 个样本，无法分割为x和y")
                 n = train_x_np.shape[0] // 2
                 train_y_np = train_x_np[n:]
                 train_x_np = train_x_np[:n]
@@ -492,9 +530,11 @@ def load_h5_two_files(train_h5_path, test_h5_path, n_train=1000, n_test=200, res
             # 找到第一个 dataset (跳过 groups)
             all_datasets = find_all_datasets(f)
             if len(all_datasets) > 0:
+                if all_datasets[0].shape[0] == 0:
+                    raise ValueError(f"在文件 {test_h5_path} 中第一个 dataset 是空的")
                 test_x_np = all_datasets[0][:]
             else:
-                raise ValueError(f"在文件 {test_h5_path} 中找不到可用的 dataset")
+                raise ValueError(f"在文件 {test_h5_path} 中找不到可用的 dataset，所有键: {list(f.keys())}")
         
         if 'y' in f:
             if isinstance(f['y'], h5py.Dataset):
@@ -512,8 +552,12 @@ def load_h5_two_files(train_h5_path, test_h5_path, n_train=1000, n_test=200, res
             # 尝试找到第二个 dataset
             all_datasets = find_all_datasets(f)
             if len(all_datasets) >= 2:
+                if all_datasets[1].shape[0] == 0:
+                    raise ValueError(f"在文件 {test_h5_path} 中第二个 dataset 是空的")
                 test_y_np = all_datasets[1][:]
             else:
+                if test_x_np.shape[0] < 2:
+                    raise ValueError(f"在文件 {test_h5_path} 中只有 {test_x_np.shape[0]} 个样本，无法分割为x和y")
                 n = test_x_np.shape[0] // 2
                 test_y_np = test_x_np[n:]
                 test_x_np = test_x_np[:n]
@@ -542,7 +586,14 @@ def load_h5_two_files(train_h5_path, test_h5_path, n_train=1000, n_test=200, res
             test_x = test_x.unsqueeze(1)
             test_y = test_y.unsqueeze(1)
     
-    # 截取指定数量
+    # 截取指定数量 - 添加边界检查
+    if train_x.shape[0] < n_train:
+        print(f"⚠️  警告: 训练集请求 {n_train} 个样本，但文件只有 {train_x.shape[0]} 个，使用全部可用样本")
+        n_train = train_x.shape[0]
+    if test_x.shape[0] < n_test:
+        print(f"⚠️  警告: 测试集请求 {n_test} 个样本，但文件只有 {test_x.shape[0]} 个，使用全部可用样本")
+        n_test = test_x.shape[0]
+    
     train_x = train_x[:n_train]
     train_y = train_y[:n_train]
     test_x = test_x[:n_test]
@@ -643,7 +694,14 @@ def load_pt_two_files(train_pt_path, test_pt_path, n_train=1000, n_test=200, res
         test_x = test_x.unsqueeze(1)
         test_y = test_y.unsqueeze(1)
     
-    # 截取
+    # 截取 - 添加边界检查
+    if train_x.shape[0] < n_train:
+        print(f"⚠️  警告: 训练集请求 {n_train} 个样本，但文件只有 {train_x.shape[0]} 个，使用全部可用样本")
+        n_train = train_x.shape[0]
+    if test_x.shape[0] < n_test:
+        print(f"⚠️  警告: 测试集请求 {n_test} 个样本，但文件只有 {test_x.shape[0]} 个，使用全部可用样本")
+        n_test = test_x.shape[0]
+    
     train_x = train_x[:n_train]
     train_y = train_y[:n_train]
     test_x = test_x[:n_test]
@@ -710,7 +768,16 @@ def load_pt_single_file(pt_path, n_train=1000, n_test=200, resolution=None):
         x = x.unsqueeze(1)
         y = y.unsqueeze(1)
     
-    # 分割
+    # 分割 - 添加边界检查
+    if x.shape[0] < n_train + n_test:
+        available = x.shape[0]
+        print(f"⚠️  警告: 请求总共 {n_train + n_test} 个样本，但文件只有 {available} 个，调整分割比例")
+        if available <= n_train:
+            n_train = available
+            n_test = 0
+        else:
+            n_test = available - n_train
+    
     train_x = x[:n_train]
     train_y = y[:n_train]
     test_x = x[n_train:n_train+n_test]
