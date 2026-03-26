@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.6] - 2026-03-26
+
+### Fixed
+- **Complete channel dimension handling bugfix for all PT formats**: Fixed multiple issues in channel dimension addition logic
+  - **Root cause 1**: `load_pt_two_files` had the same bug that was fixed in v1.3.5 for `load_pt_single_file` - it didn't handle 1D data with missing channel dimension (`x.ndim == 2`)
+  - **Root cause 2 (deeper design issue)**: Both `load_pt_single_file` and `load_pt_two_files` didn't receive the `is_2d` parameter from `load_dataset`, they guessed based on shape which caused errors when 1D data already had channel dimension:
+    - 1D data with channel: `[N, 1, L]` → `ndim == 3`
+    - The wrong logic mistook this for 2D data missing channel and added an extra channel → `[N, 1, 1, L]`
+  - **Solution**: Refactored PT loading functions to match H5 loading functions - accept `is_2d` parameter from `load_dataset` which is correctly determined by `dataset_name`
+  - **Result**: All data formats now have consistent and correct channel dimension addition logic:
+    - ✅ `load_pt_single_file` - 1D/2D, with/without channel handled correctly
+    - ✅ `load_pt_two_files` - 1D/2D, with/without channel handled correctly
+    - ✅ `load_h5_single_file` - Already correct
+    - ✅ `load_h5_two_files` - Already correct
+  - **Now all combinations are tested and verified working**
+
 ## [1.3.5] - 2026-03-26
 
 ### Fixed
@@ -144,6 +160,7 @@ python run_benchmarks.py \
 
 | Version | Date | Key Features | Notes |
 |---------|------|--------------|-------|
+| **1.3.6** | **2026-03-26** | **Complete channel dimension handling fix for all PT formats** | All 1D/2D combinations now work correctly ✅ |
 | **1.3.5** | **2026-03-26** | **Missing channel dimension bug fix (1D PT single file)** | Fix shape mismatch when loading 1D Burgers data ✅ |
 | **1.3.4** | **2026-03-26** | **Critical IndexError fix in resolution extraction** | Fix regex capture group mismatch, complete algorithm rewrite ✅ |
 | **1.3.3** | **2026-03-26** | **H5 loading bug fixes** | Fix H5 group access and resolution extraction ✅ |

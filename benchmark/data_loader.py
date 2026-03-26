@@ -639,7 +639,7 @@ def load_h5_two_files(train_h5_path, test_h5_path, n_train=1000, n_test=200, res
 # PT 加载函数
 # ============================================================================
 
-def load_pt_two_files(train_pt_path, test_pt_path, n_train=1000, n_test=200, resolution=None):
+def load_pt_two_files(train_pt_path, test_pt_path, n_train=1000, n_test=200, resolution=None, is_2d=True):
     """
     从两个 PT 文件加载 PT 格式数据。
     
@@ -649,6 +649,7 @@ def load_pt_two_files(train_pt_path, test_pt_path, n_train=1000, n_test=200, res
         n_train: 训练样本数
         n_test: 测试样本数
         resolution: 目标分辨率
+        is_2d: 是否是 2D 数据 (从 dataset_name 判断)
     
     Returns:
         train_x, train_y, test_x, test_y, info
@@ -686,14 +687,23 @@ def load_pt_two_files(train_pt_path, test_pt_path, n_train=1000, n_test=200, res
     test_x = test_x.float()
     test_y = test_y.float()
     
-    # 添加 channel 维度如果需要
-    is_2d = train_x.ndim == 3 or train_x.ndim == 4
-    if train_x.ndim == 3:  # [N, H, W]
-        train_x = train_x.unsqueeze(1)
-        train_y = train_y.unsqueeze(1)
-    if test_x.ndim == 3:
-        test_x = test_x.unsqueeze(1)
-        test_y = test_y.unsqueeze(1)
+    # 添加 channel 维度 - 基于 is_2d 判断，和 H5 加载逻辑保持一致
+    if is_2d:
+        # [N, H, W] -> [N, 1, H, W]
+        if train_x.ndim == 3:
+            train_x = train_x.unsqueeze(1)
+            train_y = train_y.unsqueeze(1)
+        if test_x.ndim == 3:
+            test_x = test_x.unsqueeze(1)
+            test_y = test_y.unsqueeze(1)
+    else:
+        # [N, L] -> [N, 1, L]
+        if train_x.ndim == 2:
+            train_x = train_x.unsqueeze(1)
+            train_y = train_y.unsqueeze(1)
+        if test_x.ndim == 2:
+            test_x = test_x.unsqueeze(1)
+            test_y = test_y.unsqueeze(1)
     
     # 截取 - 添加边界检查
     if train_x.shape[0] < n_train:
@@ -739,7 +749,7 @@ def load_pt_two_files(train_pt_path, test_pt_path, n_train=1000, n_test=200, res
     return train_x, train_y, test_x, test_y, info
 
 
-def load_pt_single_file(pt_path, n_train=1000, n_test=200, resolution=None):
+def load_pt_single_file(pt_path, n_train=1000, n_test=200, resolution=None, is_2d=True):
     """
     从单个 PT 文件加载数据。
     
@@ -748,6 +758,7 @@ def load_pt_single_file(pt_path, n_train=1000, n_test=200, resolution=None):
         n_train: 训练样本数
         n_test: 测试样本数
         resolution: 目标分辨率
+        is_2d: 是否是 2D 数据 (从 dataset_name 判断)
     
     Returns:
         train_x, train_y, test_x, test_y, info
@@ -764,13 +775,17 @@ def load_pt_single_file(pt_path, n_train=1000, n_test=200, resolution=None):
     x = x.float()
     y = y.float()
     
-    # 添加 channel 维度
-    if x.ndim == 3:  # [N, H, W] -> 2D，没有 channel 维度
-        x = x.unsqueeze(1)
-        y = y.unsqueeze(1)
-    elif x.ndim == 2:  # [N, L] -> 1D，没有 channel 维度
-        x = x.unsqueeze(1)
-        y = y.unsqueeze(1)
+    # 添加 channel 维度 - 基于 is_2d 判断，和 H5 加载逻辑保持一致
+    if is_2d:
+        # [N, H, W] -> [N, 1, H, W]
+        if x.ndim == 3:
+            x = x.unsqueeze(1)
+            y = y.unsqueeze(1)
+    else:
+        # [N, L] -> [N, 1, L]
+        if x.ndim == 2:
+            x = x.unsqueeze(1)
+            y = y.unsqueeze(1)
     
     # 分割 - 添加边界检查
     if x.shape[0] < n_train + n_test:
@@ -906,6 +921,7 @@ def load_dataset(
                 n_train=n_train,
                 n_test=n_test,
                 resolution=resolution,
+                is_2d=is_2d,
             )
         else:
             raise ValueError(f"不支持的数据格式: {data_format}")
@@ -926,6 +942,7 @@ def load_dataset(
                 n_train=n_train,
                 n_test=n_test,
                 resolution=resolution,
+                is_2d=is_2d,
             )
         else:
             raise ValueError(f"不支持的数据格式: {data_format}")
