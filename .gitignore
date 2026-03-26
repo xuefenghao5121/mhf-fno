@@ -82,3 +82,4 @@ MEMORY.md
 # Benchmark temporary files
 benchmark/test_*.log
 benchmark/tmp_*.py
+benchmark/data/ns_real_velocity.pt
