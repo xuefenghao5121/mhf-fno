@@ -467,10 +467,16 @@ def load_pt_two_files(train_pt_path, test_pt_path, n_train=1000, n_test=200, res
     
     # 添加 channel 维度如果需要
     is_2d = train_x.ndim == 3 or train_x.ndim == 4
-    if train_x.ndim == 3:  # [N, H, W]
+    if train_x.ndim == 3:  # [N, H, W] -> 2D 数据
         train_x = train_x.unsqueeze(1)
         train_y = train_y.unsqueeze(1)
     if test_x.ndim == 3:
+        test_x = test_x.unsqueeze(1)
+        test_y = test_y.unsqueeze(1)
+    if train_x.ndim == 2:  # [N, L] -> 1D 数据，需要添加 channel 维度
+        train_x = train_x.unsqueeze(1)
+        train_y = train_y.unsqueeze(1)
+    if test_x.ndim == 2:
         test_x = test_x.unsqueeze(1)
         test_y = test_y.unsqueeze(1)
     
@@ -537,7 +543,10 @@ def load_pt_single_file(pt_path, n_train=1000, n_test=200, resolution=None):
     y = y.float()
     
     # 添加 channel 维度
-    if x.ndim == 3:  # [N, H, W]
+    if x.ndim == 3:  # [N, H, W] -> 2D 数据
+        x = x.unsqueeze(1)
+        y = y.unsqueeze(1)
+    if x.ndim == 2:  # [N, L] -> 1D 数据
         x = x.unsqueeze(1)
         y = y.unsqueeze(1)
     
