@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.1] - 2026-03-26
+
+### Changed
+- **Documentation fix**: Clarify "accuracy improvement" instead of "performance improvement" (we improve accuracy by reducing test loss, not speed)
+- **Added English README**: `README_EN.md` for international audience
+- **Cleanup**: Remove entire `internal/` directory for cleaner commercial release
+
+### Project Structure after cleanup:
+```
+benchmark/
+├── README.md
+├── BENCHMARK_GUIDE.md
+├── data_loader.py     # Universal data loader
+├── run_benchmarks.py  # Benchmark entry point
+├── generate_data.py
+├── generate_ns_velocity.py
+├── test_mhf_coda_pino_quick.py
+└── data/             # Data directory
+```
+
 ## [1.3.0] - 2026-03-26
 
 ### Added
@@ -80,9 +100,10 @@ python run_benchmarks.py \
 
 ## Version History
 
-| Version | Date | Key Features | Performance |
-|---------|------|--------------|-------------|
+| Version | Date | Key Features | Notes |
+|---------|------|--------------|-------|
+| **1.3.1** | **2026-03-26** | **Documentation cleanup + English README** | Clean commercial release ✨ |
 | **1.3.0** | **2026-03-26** | **Zenodo H5 double file support + Universal data loader** | Ready for external dataset validation |
-| 1.2.0 | 2026-03-26 | PINO + Real NS Data | +36% (NS+PINO) |
-| 1.1.0 | 2026-03-24 | MHF+CoDA | +8-32% |
+| 1.2.0 | 2026-03-26 | PINO + Real NS Data | +36% accuracy improvement (NS+PINO) |
+| 1.1.0 | 2026-03-24 | MHF+CoDA | +8-32% accuracy improvement |
 | 1.0.0 | 2026-03-20 | MHF Foundation | Baseline |

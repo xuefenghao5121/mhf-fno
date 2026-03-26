@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 
-**参数高效的 Fourier Neural Operator 变体**，通过多头频率分解 (Multi-Head Fourier, MHF) 和跨头注意力 (Cross-Head Attention, CoDA) 实现参数压缩与性能提升。
+**参数高效的 Fourier Neural Operator 变体**，通过多头频率分解 (Multi-Head Fourier, MHF) 和跨头注意力 (Cross-Head Attention, CoDA) 实现参数压缩与精度提升。
 
 ---
 
@@ -14,7 +14,7 @@ MHF-FNO 是对标准 Fourier Neural Operator (FNO) 的改进：
 - **问题**: 标准 FNO 的频域卷积参数随着 `(modes × channels × channels)` 增长，参数量大
 - **思路**: 将频域卷积分解为多个独立的头，每个头处理一部分频率子空间，大幅减少参数
 - **改进**: 添加跨头注意力弥补 MHF 头独立性假设的局限性
-- **结果**: 在多个基准 PDE 数据集上实现 **24-49% 参数减少** 的同时，获得 **7-36% 性能提升**
+- **结果**: 在多个基准 PDE 数据集上实现 **24-49% 参数减少** 的同时，获得 **7-36% 精度提升** (lower test loss)
 
 ---
 
@@ -23,35 +23,42 @@ MHF-FNO 是对标准 Fourier Neural Operator (FNO) 的改进：
 | 特性 | 说明 |
 |------|------|
 | **参数高效** | 减少 24-49% 参数量，降低内存占用 |
-| **性能提升** | 在 Darcy/Burgers/NS 数据集上获得 7-36% 性能提升 |
+| **精度提升** | 在 Darcy/Burgers/NS 数据集上获得 7-36% 精度提升 (lower test loss) |
 | **兼容标准** | 兼容 neuraloperator 2.0.0 API，易于集成 |
 | **物理约束** | 支持 PINO (Physics-Informed Neural Operator) 物理约束 |
 | **真实数据** | 支持真实 Navier-Stokes 速度场时间序列数据 |
 | **灵活配置** | 支持保守到激进多种配置，适应不同场景 |
+| **Zenodo 支持** | ✨ 完整支持 Zenodo 下载的双文件 H5 格式 |
 
 ---
 
 ## 📊 性能对比
 
-### 最新突破 (v1.2.0)
+### 最新突破 (v1.3.0)
 
 **真实 Navier-Stokes 数据 + MHF+CoDA+PINO**
 
-| 模型 | Test Loss | 性能提升 | 参数减少 |
+| 模型 | Test Loss | 精度提升 | 参数减少 |
 |------|----------|---------|----------|
 | MHF+CoDA (基线) | 0.3828 | - | -49% |
 | **MHF+CoDA+PINO** | **0.001056** | **+36%** ✅ | -49% |
 
+*(精度提升 = test loss 降低百分比)*
+
 ### 完整基准结果
 
-| 数据集 | PDE 类型 | 模型 | 参数减少 | vs 标准 FNO | 推荐 |
+| 数据集 | PDE 类型 | 模型 | 参数减少 | vs 标准 FNO (test loss) | 推荐 |
 |--------|----------|------|----------|-------------|------|
-| **Darcy 2D** | 椭圆型 | MHF+Attention | **-48.6%** | **+8.17%** | ✅✅ |
-| **Burgers 1D** | 抛物型 | MHF+Attention | **-31.7%** | **+32.12%** | ✅✅✅ |
+| **Darcy 2D** | 椭圆型 | MHF+Attention | **-48.6%** | **-8.17%** ✅ | ✅✅ |
+| **Burgers 1D** | 抛物型 | MHF+Attention | **-31.7%** | **-32.12%** ✅ | ✅✅✅ |
 | **NS 2D (标量)** | 双曲型 | MHF (保守) | **-24.3%** | ~0% | ⚠️ |
-| **NS 2D (真实+PINO)** | 双曲型 | MHF+CoDA+PINO | **-49%** | **+36%** | ✅✅✅ |
+| **NS 2D (真实+PINO)** | 双曲型 | MHF+CoDA+PINO | **-49%** | **-36%** ✅ | ✅✅✅ |
+
+*(负号表示 test loss 降低，精度提升)*
 
 测试配置: `epochs=50, batch_size=32, lr=5e-4, n_modes=(16,16), hidden_channels=32, n_layers=3`
+
+*(精度提升 = 测试 loss 降低百分比，越低越好)*
 
 ---
 
@@ -68,6 +75,7 @@ pip install -r requirements.txt
 - `neuraloperator >= 2.0.0`
 - `numpy`
 - `matplotlib`
+- `h5py` (for loading H5 datasets from Zenodo)
 
 ### 安装方式
 
@@ -361,4 +369,4 @@ MIT License - 详见 [LICENSE](LICENSE)
 ---
 
 **最后更新**: 2026-03-26
-**版本**: v1.3.0
+**版本**: v1.3.1
