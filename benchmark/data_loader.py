@@ -230,6 +230,17 @@ def load_h5_single_file(h5_path, n_train=1000, n_test=200, resolution=None, is_2
     test_x = x_data[n_train:n_train+n_test]
     test_y = y_data[n_train:n_train+n_test]
     
+    # 获取实际分辨率 (信任数据shape，覆盖文件名解析)
+    if is_2d:
+        actual_res = train_x.shape[-1]
+    else:
+        actual_res = train_x.shape[-1]
+    
+    # 如果文件名解析分辨率和实际不匹配，使用实际分辨率
+    if resolution is not None and resolution != actual_res:
+        print(f"⚠️  文件名解析分辨率 {resolution}, 实际数据分辨率 {actual_res}, 使用实际分辨率")
+        resolution = actual_res
+    
     # 调整分辨率
     if resolution is not None:
         train_x = adjust_resolution(train_x, resolution, is_2d=is_2d)
@@ -373,11 +384,16 @@ def load_h5_two_files(train_h5_path, test_h5_path, n_train=1000, n_test=200, res
             test_x = test_x.unsqueeze(1)
             test_y = test_y.unsqueeze(1)
     
-    # 截取指定数量
-    train_x = train_x[:n_train]
-    train_y = train_y[:n_train]
-    test_x = test_x[:n_test]
-    test_y = test_y[:n_test]
+    # 获取实际分辨率 (信任数据shape，覆盖文件名解析的)
+    if is_2d:
+        actual_res = train_x.shape[-1]
+    else:
+        actual_res = train_x.shape[-1]
+    
+    # 如果文件名解析的分辨率和实际不匹配，使用实际分辨率
+    if resolution is not None and resolution != actual_res:
+        print(f"⚠️  文件名解析分辨率 {resolution}, 实际数据分辨率 {actual_res}, 使用实际分辨率")
+        resolution = actual_res
     
     # 调整分辨率
     if resolution is not None:

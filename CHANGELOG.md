@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.3] - 2026-03-27
+
+### Fixed
+- **CRITICAL: 1D and 2D PT data loading all failed bug** 🚨
+  - Bug location: `load_pt_two_files` and `load_pt_single_file` in `data_loader.py`
+  - Root cause: **Missing channel dimension addition for 1D data**
+    - Original code only added channel dimension for 2D data (`x.ndim == 3`)
+    - But completely forgot to add channel dimension for 1D data (`x.ndim == 2`)
+    - This caused 1D data shape `[N, L]` instead of required `[N, 1, L]`
+    - When the model expects channel dimension, dimension mismatch errors occur
+  - Why not caught earlier? **No complete test coverage** before, only resolution parsing was tested
+  - Fix: Added missing channel dimension logic for 1D data in both PT loading functions
+  - Added complete test suite `test_data_loading.py` that covers:
+    - 1D PT double files ✓
+    - 2D PT double files ✓
+    - 1D PT single file ✓
+    - 2D PT single file ✓
+  - **Result**: Now 1D and 2D data all load successfully with correct shape
+
+### Impact
+- **BEFORE**: Any PT format 1D data loading would fail (dimension mismatch)
+- **AFTER**: All formats (PT/H5, single/double, 1D/2D) work correctly
+
 ## [1.3.2] - 2026-03-26
 
 ### Fixed
@@ -110,6 +133,7 @@ python run_benchmarks.py \
 
 | Version | Date | Key Features | Notes |
 |---------|------|--------------|-------|
+| **1.3.3** | **2026-03-27** | **CRITICAL: Fix 1D/2D PT data loading all failed bug** | 🔥 All data formats now work correctly |
 | **1.3.2** | **2026-03-26** | **H5 file parsing bug fix** | Fix incorrect data key lookup for Zenodo datasets ✅ |
 | **1.3.1** | **2026-03-26** | **Documentation cleanup + English README** | Clean commercial release ✨ |
 | **1.3.0** | **2026-03-26** | **Zenodo H5 double file support + Universal data loader** | Ready for external dataset validation |
