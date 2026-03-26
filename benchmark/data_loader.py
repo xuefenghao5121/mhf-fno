@@ -57,43 +57,108 @@ def parse_resolution_from_filename(filename: str) -> int:
     支持的命名格式:
     - darcy_train_16.pt -> 16
     - ns_train_64.pt -> 64
-    - burgers_train_1024.pt -> 1024
-    - 1D_Burgers_Re1000_Train.h5 -> 1024 (Re后面是分辨率)
-    - 2D_NS_Re100_Train.h5 -> 64 (默认)
+    - 2D_DarcyFlow_64x64_Train.h5 -> 64
+    - NavierStokes2d_128_Train.h5 -> 128
+    - 1024x1024_Darcy_Train.h5 -> 1024
+    - 1D_Burgers_Re1000_Train.h5 -> 1024 (Re后面是分辨率映射)
+    - 2D_NS_Re100_Train.h5 -> 64 (默认映射)
     - 2D_DarcyFlow_64_Train.h5 -> 64
+    - file-2048x2048-train.h5 -> 2048 (连字符格式)
     
     Args:
         filename: 文件名 (不含路径)
     
     Returns:
-        int: 解析出的分辨率，如果无法解析返回默认值
+        int: 解析出的分辨率，如果无法解析返回默认值 64
     """
-    # 尝试匹配任意数字
-    # 格式: _数字_Train 或 _数字.pt 或 _数字_ 或 数字_Train
-    match = re.search(r'_(\d+)', filename, re.IGNORECASE)
-    if match:
-        num = int(match.group(1))
-        # 过滤掉不合理的数字 (年份，如 1D, 2D)
-        if num in [1, 2]:
-            # 继续找下一个数字
-            remaining = filename[match.end():]
-            match2 = re.search(r'_(\d+)', remaining)
-            if match2:
-                return int(match2.group(1))
-        return num
+    # 优先级 1: 匹配 "NxN" 格式 (如 64x64, 1024x1024)
+    # 匹配任意地方出现的 数字x数字
+    match_xy = re.search(r'(\d+)[xX](\d+)', filename)
+    if match_xy and match_xy.lastindex >= 1:
+        # 取第一个数字，因为通常两个方向分辨率相同
+        try:
+            num = int(match_xy.group(1))
+            # 过滤掉 1x1 这种极小值，继续找
+            if num > 8:  # 合理分辨率最小应该大于 8
+                return num
+        except (IndexError, ValueError):
+            pass
     
-    # 尝试匹配 Re 后面的数字 (Burgers/NS: Re1000, Re100)
+    # 优先级 2: 匹配下划线分隔的纯数字
+    # 收集所有下划线分隔的数字
+    all_matches = list(re.finditer(r'_(\d+)', filename, re.IGNORECASE))
+    for match in all_matches:
+        if match.lastindex >= 1:
+            try:
+                num = int(match.group(1))
+                # 过滤掉 1, 2 (这些通常是维度: 1D, 2D)
+                if num in [1, 2]:
+                    continue
+                if num > 0:
+                    return num
+            except (IndexError, ValueError):
+                continue
+    
+    # 优先级 3: 匹配连字符分隔的纯数字
+    all_matches_hyphen = list(re.finditer(r'-(\d+)-', filename, re.IGNORECASE))
+    for match in all_matches_hyphen:
+        if match.lastindex >= 1:
+            try:
+                num = int(match.group(1))
+                if num in [1, 2]:
+                    continue
+                if num > 0:
+                    return num
+            except (IndexError, ValueError):
+                continue
+    
+    # 优先级 4: 匹配文件名开头的数字 (如 "4096_file.h5")
+    match_start = re.match(r'^(\d+)', filename)
+    if match_start:
+        try:
+            num = int(match_start.group(1))
+            if num > 8:  # 过滤掉开头的 1, 2
+                return num
+        except (IndexError, ValueError):
+            pass
+    
+    # 优先级 5: 尝试匹配 Re 后面的数字 (Burgers/NS: Re1000, Re100)
     match_re = re.search(r'Re(\d+)', filename, re.IGNORECASE)
     if match_re:
-        # Re 后面的数字是雷诺数，对于 Burgers 这就是分辨率相关
-        # Burgers: Re1000 -> 1024, Re100 -> 128
-        re_num = int(match_re.group(1))
-        if re_num >= 1000:
-            return 1024
-        elif re_num >= 100:
-            return 64
+        try:
+            # Re 后面的数字是雷诺数，对于 Burgers 这就是分辨率相关映射
+            # Burgers: Re1000 -> 1024, Re100 -> 128, Re10000 -> 2048
+            re_num = int(match_re.group(1))
+            if re_num >= 10000:
+                return 2048
+            elif re_num >= 1000:
+                return 1024
+            elif re_num >= 100:
+                return 128
+            elif re_num >= 10:
+                return 64
+        except (IndexError, ValueError):
+            pass
     
-    # 默认返回
+    # 优先级 6: 匹配任意孤立数字（最后尝试）
+    any_match = re.search(r'(\d+)', filename)
+    if any_match:
+        try:
+            num = int(any_match.group(1))
+            if num in [1, 2]:
+                # 找下一个
+                remaining = filename[any_match.end():]
+                any_match2 = re.search(r'(\d+)', remaining)
+                if any_match2:
+                    num2 = int(any_match2.group(1))
+                    if num2 > 8:
+                        return num2
+            elif num > 8:
+                return num
+        except (IndexError, ValueError):
+            pass
+    
+    # 默认返回 - 永远不会崩溃
     print(f"⚠️  无法从文件名 '{filename}' 解析分辨率，使用默认值 64")
     return 64
 
