@@ -2,6 +2,40 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0] - 2026-03-26
+
+### Added
+- **Zenodo Double H5 Support**: Full support for downloaded datasets from https://zenodo.org/records/13355846
+- **Universal Data Loader**: New `data_loader.py` supports all formats:
+  - PT single file (local generated)
+  - PT double files (train + test separate)
+  - H5 single file (PDEBench format)
+  - **H5 double files (Zenodo format) ✨** - train.h5 + test.h5 separate files
+- **New command line arguments**: `--train_path` and `--test_path` for double file mode
+
+### Changed
+- Moved `run_benchmarks.py` from `internal/` to `benchmark/` root for direct access
+- Updated documentation with clear usage instructions for Zenodo datasets
+- Cleanup directory structure for commercial release
+
+### Usage Examples
+
+**Burgers 1D from Zenodo:**
+```bash
+python run_benchmarks.py \
+    --dataset burgers --format h5 \
+    --train_path ./data/1D_Burgers_Re1000_Train.h5 \
+    --test_path ./data/1D_Burgers_Re1000_Test.h5
+```
+
+**Navier-Stokes 2D from Zenodo:**
+```bash
+python run_benchmarks.py \
+    --dataset navier_stokes --format h5 \
+    --train_path ./data/2D_NS_Re100_Train.h5 \
+    --test_path ./data/2D_NS_Re100_Test.h5
+```
+
 ## [1.2.0] - 2026-03-26
 
 ### Added
@@ -48,6 +82,7 @@ All notable changes to this project will be documented in this file.
 
 | Version | Date | Key Features | Performance |
 |---------|------|--------------|-------------|
+| **1.3.0** | **2026-03-26** | **Zenodo H5 double file support + Universal data loader** | Ready for external dataset validation |
 | 1.2.0 | 2026-03-26 | PINO + Real NS Data | +36% (NS+PINO) |
 | 1.1.0 | 2026-03-24 | MHF+CoDA | +8-32% |
 | 1.0.0 | 2026-03-20 | MHF Foundation | Baseline |
