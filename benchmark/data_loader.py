@@ -160,6 +160,50 @@ def adjust_resolution(data, target_resolution, is_2d=True):
 # H5 加载函数
 # ============================================================================
 
+def find_first_dataset(obj):
+    """
+    递归查找第一个 dataset，跳过 group。
+    
+    Args:
+        obj: h5py 对象 (File 或 Group 或 Dataset)
+    
+    Returns:
+        h5py.Dataset: 找到的第一个 dataset
+    
+    Raises:
+        ValueError: 如果找不到任何 dataset
+    """
+    if isinstance(obj, h5py.Dataset):
+        return obj
+    
+    if isinstance(obj, h5py.Group):
+        for key in obj.keys():
+            try:
+                result = find_first_dataset(obj[key])
+                if result is not None:
+                    return result
+            except ValueError:
+                continue
+    
+    raise ValueError("在 H5 文件中找不到任何 dataset")
+
+
+def find_all_datasets(obj, result_list=None):
+    """递归查找所有 datasets"""
+    if result_list is None:
+        result_list = []
+    
+    if isinstance(obj, h5py.Dataset):
+        result_list.append(obj)
+        return result_list
+    
+    if isinstance(obj, h5py.Group):
+        for key in obj.keys():
+            find_all_datasets(obj[key], result_list)
+    
+    return result_list
+
+
 def load_h5_single_file(h5_path, n_train=1000, n_test=200, resolution=None, is_2d=True):
     """
     从单个 H5 文件加载数据 (PDEBench 原格式)。
@@ -188,18 +232,37 @@ def load_h5_single_file(h5_path, n_train=1000, n_test=200, resolution=None, is_2
     with h5py.File(h5_path, 'r') as f:
         # 尝试不同数据键
         if 'tensor' in f:
-            data = f['tensor'][:]
+            if isinstance(f['tensor'], h5py.Dataset):
+                data = f['tensor'][:]
+            else:
+                # tensor is a group, find first dataset inside
+                ds = find_first_dataset(f['tensor'])
+                data = ds[:]
         elif 'data' in f:
-            data = f['data'][:]
+            if isinstance(f['data'], h5py.Dataset):
+                data = f['data'][:]
+            else:
+                ds = find_first_dataset(f['data'])
+                data = ds[:]
         elif 'x' in f and 'y' in f:
             # PDEBench 有些分开存储
-            x_data = f['x'][:]
-            y_data = f['y'][:]
+            if isinstance(f['x'], h5py.Dataset):
+                x_data = f['x'][:]
+                y_data = f['y'][:]
+            else:
+                # x and y are groups, find datasets inside
+                ds_x = find_first_dataset(f['x'])
+                ds_y = find_first_dataset(f['y'])
+                x_data = ds_x[:]
+                y_data = ds_y[:]
             data = None
         else:
-            # 尝试第一个键
-            keys = list(f.keys())
-            data = f[keys[0]][:]
+            # 尝试找到第一个 dataset (跳过 groups)
+            all_datasets = find_all_datasets(f)
+            if len(all_datasets) > 0:
+                data = all_datasets[0][:]
+            else:
+                raise ValueError(f"在文件 {h5_path} 中找不到可用的 dataset，所有键: {list(f.keys())}")
     
     if data is not None:
         # 单个文件包含输入输出，分割
@@ -304,22 +367,42 @@ def load_h5_two_files(train_h5_path, test_h5_path, n_train=1000, n_test=200, res
     # 加载训练集
     with h5py.File(train_h5_path, 'r') as f:
         if 'x' in f:
-            train_x_np = f['x'][:]
+            if isinstance(f['x'], h5py.Dataset):
+                train_x_np = f['x'][:]
+            else:
+                ds = find_first_dataset(f['x'])
+                train_x_np = ds[:]
         elif 'input' in f:
-            train_x_np = f['input'][:]
+            if isinstance(f['input'], h5py.Dataset):
+                train_x_np = f['input'][:]
+            else:
+                ds = find_first_dataset(f['input'])
+                train_x_np = ds[:]
         else:
-            keys = list(f.keys())
-            train_x_np = f[keys[0]][:]
+            # 找到第一个 dataset (跳过 groups)
+            all_datasets = find_all_datasets(f)
+            if len(all_datasets) > 0:
+                train_x_np = all_datasets[0][:]
+            else:
+                raise ValueError(f"在文件 {train_h5_path} 中找不到可用的 dataset")
         
         if 'y' in f:
-            train_y_np = f['y'][:]
+            if isinstance(f['y'], h5py.Dataset):
+                train_y_np = f['y'][:]
+            else:
+                ds = find_first_dataset(f['y'])
+                train_y_np = ds[:]
         elif 'output' in f:
-            train_y_np = f['output'][:]
+            if isinstance(f['output'], h5py.Dataset):
+                train_y_np = f['output'][:]
+            else:
+                ds = find_first_dataset(f['output'])
+                train_y_np = ds[:]
         else:
-            # 假设第二个键
-            keys = list(f.keys())
-            if len(keys) >= 2:
-                train_y_np = f[keys[1]][:]
+            # 尝试找到第二个 dataset
+            all_datasets = find_all_datasets(f)
+            if len(all_datasets) >= 2:
+                train_y_np = all_datasets[1][:]
             else:
                 # 分割
                 n = train_x_np.shape[0] // 2
@@ -329,21 +412,42 @@ def load_h5_two_files(train_h5_path, test_h5_path, n_train=1000, n_test=200, res
     # 加载测试集
     with h5py.File(test_h5_path, 'r') as f:
         if 'x' in f:
-            test_x_np = f['x'][:]
+            if isinstance(f['x'], h5py.Dataset):
+                test_x_np = f['x'][:]
+            else:
+                ds = find_first_dataset(f['x'])
+                test_x_np = ds[:]
         elif 'input' in f:
-            test_x_np = f['input'][:]
+            if isinstance(f['input'], h5py.Dataset):
+                test_x_np = f['input'][:]
+            else:
+                ds = find_first_dataset(f['input'])
+                test_x_np = ds[:]
         else:
-            keys = list(f.keys())
-            test_x_np = f[keys[0]][:]
+            # 找到第一个 dataset (跳过 groups)
+            all_datasets = find_all_datasets(f)
+            if len(all_datasets) > 0:
+                test_x_np = all_datasets[0][:]
+            else:
+                raise ValueError(f"在文件 {test_h5_path} 中找不到可用的 dataset")
         
         if 'y' in f:
-            test_y_np = f['y'][:]
+            if isinstance(f['y'], h5py.Dataset):
+                test_y_np = f['y'][:]
+            else:
+                ds = find_first_dataset(f['y'])
+                test_y_np = ds[:]
         elif 'output' in f:
-            test_y_np = f['output'][:]
+            if isinstance(f['output'], h5py.Dataset):
+                test_y_np = f['output'][:]
+            else:
+                ds = find_first_dataset(f['output'])
+                test_y_np = ds[:]
         else:
-            keys = list(f.keys())
-            if len(keys) >= 2:
-                test_y_np = f[keys[1]][:]
+            # 尝试找到第二个 dataset
+            all_datasets = find_all_datasets(f)
+            if len(all_datasets) >= 2:
+                test_y_np = all_datasets[1][:]
             else:
                 n = test_x_np.shape[0] // 2
                 test_y_np = test_x_np[n:]
