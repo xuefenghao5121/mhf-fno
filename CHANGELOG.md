@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.7] - 2026-03-27
+
+### Fixed
+- **Full line-by-line review of `data_loader.py` - complete bugfix pass**:
+  1. **PT double files missing resolution adjustment**: `load_pt_two_files` didn't have the resolution adjustment logic that other loading functions had, now added
+  2. **PT single files not respecting target resolution**: `load_pt_single_file` always used the resolution from file instead of interpolating to target resolution, now fixed to match behavior of other functions
+  3. **Improved resolution extraction algorithm**: Changed from "return first match" to "collect all candidates and return largest" - this avoids incorrectly picking up the dimension marker `1` in `1D` as the resolution when the actual resolution is later in the filename
+  4. **Improved empty dataset handling in H5 auto split**: Now filters out empty datasets before picking x/y, more robust when H5 has empty metadata groups
+  5. **Code clarity**: Added detailed comments explaining the channel dimension addition logic: "only add channel dimension when it doesn't exist, never add twice"
+
+### Verified
+- ✅ PT single file: 1D/2D, with/without channel → correct
+- ✅ PT double files: 1D/2D, with/without channel → correct  
+- ✅ H5 single file: 1D/2D, with/without channel → correct
+- ✅ H5 double files: 1D/2D, with/without channel → correct
+- ✅ Resolution adjustment: all formats get consistent interpolation to target resolution
+- ✅ All tests pass: 11/11 unit tests + 4/4 integration tests
+
 ## [1.3.6] - 2026-03-26
 
 ### Fixed
@@ -160,6 +178,7 @@ python run_benchmarks.py \
 
 | Version | Date | Key Features | Notes |
 |---------|------|--------------|-------|
+| **1.3.7** | **2026-03-27** | **Full line-by-line review of `data_loader.py` - complete bugfix pass** | All combinations verified working ✅ |
 | **1.3.6** | **2026-03-26** | **Complete channel dimension handling fix for all PT formats** | All 1D/2D combinations now work correctly ✅ |
 | **1.3.5** | **2026-03-26** | **Missing channel dimension bug fix (1D PT single file)** | Fix shape mismatch when loading 1D Burgers data ✅ |
 | **1.3.4** | **2026-03-26** | **Critical IndexError fix in resolution extraction** | Fix regex capture group mismatch, complete algorithm rewrite ✅ |

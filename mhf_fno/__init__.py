@@ -44,7 +44,7 @@ from .mhf_attention import (
     MHFFNOWithAttention
 )
 
-__version__ = "1.3.4"
+__version__ = "1.3.7"
 __author__ = "Tianyuan Team"
 
 __all__ = [
