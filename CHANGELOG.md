@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.3] - 2026-03-26
+
+### Fixed
+- **H5 file loading error**: Fixed `TypeError: Accessing a group is done with bytes or str, not slice`
+  - The issue was incorrect slicing when accessing H5 file groups, caused by improper group path handling
+  - Corrected the group accessing logic to properly traverse nested H5 file structure
+  - Now loads all standard H5 format datasets correctly without exception
+
+- **Resolution extraction error**: Fixed `IndexError: Tuple index out of range`
+  - The issue caused incorrect resolution extraction (falsely detected as 4096) when parsing dataset metadata
+  - Fixed dimension detection logic to handle different H5 metadata formats
+  - Correctly extracts resolution from both single-file and double-file H5 datasets
+
 ## [1.3.2] - 2026-03-26
 
 ### Fixed
@@ -110,6 +123,7 @@ python run_benchmarks.py \
 
 | Version | Date | Key Features | Notes |
 |---------|------|--------------|-------|
+| **1.3.3** | **2026-03-26** | **H5 loading bug fixes** | Fix H5 group access and resolution extraction ✅ |
 | **1.3.2** | **2026-03-26** | **H5 file parsing bug fix** | Fix incorrect data key lookup for Zenodo datasets ✅ |
 | **1.3.1** | **2026-03-26** | **Documentation cleanup + English README** | Clean commercial release ✨ |
 | **1.3.0** | **2026-03-26** | **Zenodo H5 double file support + Universal data loader** | Ready for external dataset validation |

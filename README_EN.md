@@ -377,4 +377,4 @@ MIT License - see [LICENSE](LICENSE) for details.
 ---
 
 **Last Updated**: 2026-03-26
-**Version**: v1.3.2
+**Version**: v1.3.3
