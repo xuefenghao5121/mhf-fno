@@ -60,6 +60,7 @@ def parse_resolution_from_filename(filename: str) -> int:
     - burgers_train_1024.pt -> 1024
     - 1D_Burgers_Re1000_Train.h5 -> 1024 (Re后面是分辨率)
     - 2D_NS_Re100_Train.h5 -> 64 (默认)
+    - 2D_DarcyFlow_64_Train.h5 -> 64
     
     Args:
         filename: 文件名 (不含路径)
@@ -67,11 +68,19 @@ def parse_resolution_from_filename(filename: str) -> int:
     Returns:
         int: 解析出的分辨率，如果无法解析返回默认值
     """
-    # 尝试匹配数字
-    # 格式: _数字_Train 或 _数字.pt 或 _数字_
-    match = re.search(r'_(\d+)(?:_Train|Train|_test|Test|\\.pt|\\.h5)', filename, re.IGNORECASE)
+    # 尝试匹配任意数字
+    # 格式: _数字_Train 或 _数字.pt 或 _数字_ 或 数字_Train
+    match = re.search(r'_(\d+)', filename, re.IGNORECASE)
     if match:
-        return int(match.group(1))
+        num = int(match.group(1))
+        # 过滤掉不合理的数字 (年份，如 1D, 2D)
+        if num in [1, 2]:
+            # 继续找下一个数字
+            remaining = filename[match.end():]
+            match2 = re.search(r'_(\d+)', remaining)
+            if match2:
+                return int(match2.group(1))
+        return num
     
     # 尝试匹配 Re 后面的数字 (Burgers/NS: Re1000, Re100)
     match_re = re.search(r'Re(\d+)', filename, re.IGNORECASE)
@@ -173,6 +182,9 @@ def load_h5_single_file(h5_path, n_train=1000, n_test=200, resolution=None, is_2
     
     print(f"\n📊 从单文件 H5 加载: {h5_path}")
     
+    x_data = None
+    y_data = None
+    
     with h5py.File(h5_path, 'r') as f:
         # 尝试不同数据键
         if 'tensor' in f:
@@ -183,14 +195,13 @@ def load_h5_single_file(h5_path, n_train=1000, n_test=200, resolution=None, is_2
             # PDEBench 有些分开存储
             x_data = f['x'][:]
             y_data = f['y'][:]
+            data = None
         else:
             # 尝试第一个键
             keys = list(f.keys())
             data = f[keys[0]][:]
-            x_data = None
-            y_data = None
     
-    if x_data is None:
+    if data is not None:
         # 单个文件包含输入输出，分割
         n_samples = data.shape[0]
         split = n_samples // 2
