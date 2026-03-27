@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.3] - 2026-03-27
+
+### Fixed
+- **Burgers dataset dimension detection from filename**: Fixed incorrect is_2d judgment logic
+  - **Problem**: Code commented "detect from actual data dimensions" but just hard-coded is_2d=False
+  - **Impact**: 2D Burgers datasets were always treated as 1D, causing dimension mismatches
+  - **Root Cause**: In load_dataset(), dimension detection for Burgers was not implemented
+    ```python
+    elif dataset_name == 'burgers':
+        # Burgers 有1D和2D版本，需要根据实际数据维度判断
+        # 先尝试加载一个样本判断维度
+        is_2d = False  # ❌ Only default value, no actual detection!
+    ```
+  - **Solution**: Detect dimension from filename pattern
+    - If filename contains '2d' or '2D' → is_2d = True
+    - If filename contains '1d' or '1D' → is_2d = False
+    - Added debug prints to show dimension detection results
+  
+  - **Examples**:
+    - `Burgers_1024_2d.h5` → Detected as 2D ✅
+    - `Burgers_4096_1d.h5` → Detected as 1D ✅
+    - `Burgers_256_2d.h5` → Detected as 2D ✅
+
+### Changed
+- **Version update**: Bumped to 1.5.3 for dimension detection fix
+
 ## [1.5.1] - 2026-03-27
 
 ### Fixed

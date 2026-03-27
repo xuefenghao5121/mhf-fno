@@ -947,9 +947,19 @@ def load_dataset(
     if dataset_name in ['darcy', 'navier_stokes']:
         is_2d = True
     elif dataset_name == 'burgers':
-        # Burgers 有1D和2D版本，需要根据实际数据维度判断
-        # 先尝试加载一个样本判断维度
-        is_2d = False  # 默认1D
+        # ✅ 修复：真正检测 Burgers 数据维度
+        # 从文件名或文件内容判断是 1D 还是 2D
+        is_2d = False  # 默认默认值，下面会重新检测
+        
+        # 如果提供了 train_path，检查文件名
+        if train_path is not None:
+            if '2d' in train_path.lower() or '2D' in train_path:
+                is_2d = True
+                print(f"📂 从文件名检测到 2D Burgers 数据集: {train_path}")
+            elif '1d' in train_path.lower() or '1D' in train_path:
+                is_2d = False
+                print(f"📂 从文件名检测到 1D Burgers 数据集: {train_path}")
+        # 如果没有 train_path，尝试从数据文件检测（在后面处理）
     else:
         is_2d = False
     
