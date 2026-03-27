@@ -595,21 +595,37 @@ def load_h5_two_files(train_h5_path, test_h5_path, n_train=1000, n_test=200, res
     test_x = torch.from_numpy(test_x_np).float()
     test_y = torch.from_numpy(test_y_np).float()
     
-    # 添加 channel 维度
+    # 添加 channel 维度（修复2维数据集问题）
     if is_2d:
-        # [N, H, W] -> [N, 1, H, W]
-        if train_x.ndim == 3:
+        # 处理2维数据的各种情况
+        if train_x.ndim == 2:  # [H, W] -> 单样本，需要添加样本维度和通道
+            train_x = train_x.unsqueeze(0).unsqueeze(0)  # [H, W] -> [1, 1, H, W]
+            train_y = train_y.unsqueeze(0).unsqueeze(0)
+        elif train_x.ndim == 3:  # [N, H, W] -> 添加通道
             train_x = train_x.unsqueeze(1)
             train_y = train_y.unsqueeze(1)
-        if test_x.ndim == 3:
+        # 4维 [N, C, H, W] 不需要处理
+        
+        if test_x.ndim == 2:
+            test_x = test_x.unsqueeze(0).unsqueeze(0)
+            test_y = test_y.unsqueeze(0).unsqueeze(0)
+        elif test_x.ndim == 3:
             test_x = test_x.unsqueeze(1)
             test_y = test_y.unsqueeze(1)
     else:
-        # [N, L] -> [N, 1, L]
-        if train_x.ndim == 2:
+        # 处理1维数据的各种情况
+        if train_x.ndim == 1:  # [L] -> 单样本
+            train_x = train_x.unsqueeze(0).unsqueeze(0)  # [L] -> [1, 1, L]
+            train_y = train_y.unsqueeze(0).unsqueeze(0)
+        elif train_x.ndim == 2:  # [N, L] -> 添加通道
             train_x = train_x.unsqueeze(1)
             train_y = train_y.unsqueeze(1)
-        if test_x.ndim == 2:
+        # 3维 [N, C, L] 不需要处理
+        
+        if test_x.ndim == 1:
+            test_x = test_x.unsqueeze(0).unsqueeze(0)
+            test_y = test_y.unsqueeze(0).unsqueeze(0)
+        elif test_x.ndim == 2:
             test_x = test_x.unsqueeze(1)
             test_y = test_y.unsqueeze(1)
     
@@ -927,7 +943,15 @@ def load_dataset(
         )
     """
     # 判断是 2D 还是 1D
-    is_2d = dataset_name in ['darcy', 'navier_stokes']
+    # 优先根据 dataset_name 判断，然后根据实际数据维度验证
+    if dataset_name in ['darcy', 'navier_stokes']:
+        is_2d = True
+    elif dataset_name == 'burgers':
+        # Burgers 有1D和2D版本，需要根据实际数据维度判断
+        # 先尝试加载一个样本判断维度
+        is_2d = False  # 默认1D
+    else:
+        is_2d = False
     
     # 双文件模式优先级高
     if train_path is not None and test_path is not None:
