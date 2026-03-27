@@ -2,7 +2,42 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.3.8] - 2026-03-27
+## [1.4.0] - 2026-03-27
+
+### Fixed
+- **Issue #1: Flexible data dimensions in `adjust_resolution`**: Support various data storage formats in H5 files
+  - **Problem**: `ValueError: 1D数据至少需要2个维度 [N, L]，但得到 1 维，形状: torch.Size([1000])`
+  -   User's H5 files had different storage formats that weren't handled:
+    - Some files stored data as `[L]` (1D single sample)
+    - Some files stored as `[N*L]` (flattened)
+    - Some files stored as `[L, N]` (transposed)
+  - **Impact**: H5 files from external sources (Zenodo, PDEBench) failed to load
+  - **Solution**: Complete rewrite of `adjust_resolution` to auto-detect and normalize all dimension formats:
+    - 1D: `[L]` → `[1,1,L]`, `[N,L]` → `[N,1,L]`, `[N,C,L]` unchanged
+    - 2D: `[H,W]` → `[1,1,H,W]`, `[N,H,W]` → `[N,1,H,W]`, `[N,C,H,W]` unchanged
+    - Auto-detect transposed format `[L,N]` and transpose
+    - Better error messages with clear format expectations
+  - **Verification**: 
+    - ✅ 1D single file: [L], [N,L], [N,C,L] all work
+    - ✅ 1D double files: [L], [N,L], [N,C,L] all work  
+    - ✅ 2D single file: [H,W], [N,H,W], [N,C,H,W] all work
+    - ✅ 2D double files: [H,W], [N,H,W], [N,C,H,W] all work
+    - ✅ Transposed format detection works
+    - ✅ Error messages are clear and helpful
+
+### Changed
+- **Version update**: Bumped to 1.4.0 for critical H5 loading improvements
+
+## [1.3.9] - 2026-03-27
+
+### Fixed
+- **PINO Physics Boundary Conditions**: Added configurable boundary condition support
+  - Support PERIODIC (default, backward compatible)
+  - Support DIRICHLET (fixed value)
+  - Support NEUMANN (zero gradient)
+  - Efficient periodic boundaries using torch.roll
+  - Accurate non-periodic boundaries using finite differences
+  - Comprehensive test suite for all boundary types
 
 ### Fixed
 - **Critical bug: 1D data loading completely fails in all PT formats**: Fixed missing channel dimension addition in 1D data
@@ -192,6 +227,8 @@ python run_benchmarks.py \
 
 | Version | Date | Key Features | Notes |
 |---------|------|--------------|-------|
+| **1.4.0** | **2026-03-27** | **Issue #1: Flexible data dimensions** | Support all H5 storage formats ✨ |
+| **1.3.9** | **2026-03-27** | **Configurable PINO boundary conditions** | PERIODIC/DIRICHLET/NEUMANN ✅ |
 | **1.3.8** | **2026-03-27** | **Critical bug: 1D data loading completely fails in all PT formats** | Fixed missing channel dimension addition for 1D data ✅ |
 | **1.3.7** | **2026-03-27** | **Full line-by-line review of `data_loader.py` - complete bugfix pass** | All combinations verified working ✅ |
 | **1.3.6** | **2026-03-26** | **Complete channel dimension handling fix for all PT formats** | All 1D/2D combinations now work correctly ✅ |
