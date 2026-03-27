@@ -509,14 +509,37 @@ def load_h5_two_files(train_h5_path, test_h5_path, n_train=1000, n_test=200, res
                 train_x_np = ds[:]
                 print(f"   从 'input' group 提取: 形状 {train_x_np.shape}")
         else:
-            # 找到第一个 dataset (跳过 groups)
+            # PDEBench Navier-Stokes 格式检测
             all_datasets = find_all_datasets(f)
             print(f"   ⚠️  未找到 'x' 或 'input' 键，查找所有 datasets...")
             print(f"   找到 {len(all_datasets)} 个 dataset:")
             for i, ds in enumerate(all_datasets):
                 print(f"      [{i}] {ds.name}: 形状 {ds.shape}, dtype {ds.dtype}")
             
-            if len(all_datasets) > 0:
+            # 检查是否是 'train' group (PDEBench NS 格式)
+            pdebench_u = None
+            if 'train' in f:
+                train_group = f['train']
+                if 'u' in train_group and isinstance(train_group['u'], h5py.Dataset):
+                    u_ds = train_group['u']
+                    if u_ds.ndim == 4 and u_ds.shape[1] > 1:  # [N, T, H, W] with T > 1
+                        pdebench_u = u_ds
+                        print(f"   ✅ 检测到 PDEBench Navier-Stokes 格式: /train/u")
+                        print(f"      形状: {u_ds.shape} (样本, 时间步, H, W)")
+            
+            if pdebench_u is not None:
+                # 提取 PDEBench NS 数据
+                data = pdebench_u[:]  # [N, T, H, W]
+                print(f"   提取 PDEBench Navier-Stokes 数据:")
+                print(f"      输入 x (初始状态): {data.shape[0]} x {data.shape[2]} x {data.shape[3]}")
+                print(f"      输出 y (最终状态): {data.shape[0]} x {data.shape[2]} x {data.shape[3]}")
+                
+                # 输入: 初始速度场 u[:, 0, :, :]
+                train_x_np = data[:, 0, :, :]  # [N, H, W]
+                # 输出: 最终速度场 u[:, -1, :, :]
+                train_y_np = data[:, -1, :, :]  # [N, H, W]
+                
+            elif len(all_datasets) > 0:
                 if all_datasets[0].shape[0] == 0:
                     raise ValueError(f"在文件 {train_h5_path} 中第一个 dataset 是空的")
                 train_x_np = all_datasets[0][:]
@@ -571,14 +594,32 @@ def load_h5_two_files(train_h5_path, test_h5_path, n_train=1000, n_test=200, res
                 ds = find_first_dataset(f['input'])
                 test_x_np = ds[:]
         else:
-            # 找到第一个 dataset (跳过 groups)
-            all_datasets = find_all_datasets(f)
-            if len(all_datasets) > 0:
-                if all_datasets[0].shape[0] == 0:
-                    raise ValueError(f"在文件 {test_h5_path} 中第一个 dataset 是空的")
-                test_x_np = all_datasets[0][:]
+            # PDEBench Navier-Stokes 格式检测（与训练集相同）
+            pdebench_u = None
+            if 'train' in f:
+                train_group = f['train']
+                if 'u' in train_group and isinstance(train_group['u'], h5py.Dataset):
+                    u_ds = train_group['u']
+                    if u_ds.ndim == 4 and u_ds.shape[1] > 1:
+                        pdebench_u = u_ds
+                        print(f"   ✅ 检测到 PDEBench Navier-Stokes 格式: /train/u")
+                        print(f"      形状: {u_ds.shape} (样本, 时间步, H, W)")
+            
+            if pdebench_u is not None:
+                data = pdebench_u[:]
+                test_x_np = data[:, 0, :, :]
+                test_y_np = data[:, -1, :, :]
+                print(f"   提取 PDEBench Navier-Stokes 数据:")
+                print(f"      输入 x: {test_x_np.shape}")
+                print(f"      输出 y: {test_y_np.shape}")
             else:
-                raise ValueError(f"在文件 {test_h5_path} 中找不到可用的 dataset，所有键: {list(f.keys())}")
+                all_datasets = find_all_datasets(f)
+                if len(all_datasets) > 0:
+                    if all_datasets[0].shape[0] == 0:
+                        raise ValueError(f"在文件 {test_h5_path} 中第一个 dataset 是空的")
+                    test_x_np = all_datasets[0][:]
+                else:
+                    raise ValueError(f"在文件 {test_h5_path} 中找不到可用的 dataset，所有键: {list(f.keys())}")
         
         if 'y' in f:
             if isinstance(f['y'], h5py.Dataset):
