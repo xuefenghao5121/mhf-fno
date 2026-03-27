@@ -110,6 +110,7 @@ def train_model(model, train_x, train_y, test_x, test_y, config, verbose=True):
     
     n_train = train_x.shape[0]
     batch_size = config['batch_size']
+    eval_every = config.get('eval_every', 10)  # 每10个epoch评估一次测试集
     
     for epoch in range(config['epochs']):
         t0 = time.time()
@@ -134,21 +135,25 @@ def train_model(model, train_x, train_y, test_x, test_y, config, verbose=True):
         
         scheduler.step()
         epoch_time = time.time() - t0
-        
-        # 测试
-        model.eval()
-        with torch.no_grad():
-            test_loss = loss_fn(model(test_x), test_y).item()
-        
         results['train_losses'].append(train_loss / batch_count)
-        results['test_losses'].append(test_loss)
         results['epoch_times'].append(epoch_time)
         
-        if verbose and (epoch + 1) % 10 == 0:
-            print(f"  Epoch {epoch+1}/{config['epochs']}: "
-                  f"Train {train_loss/batch_count:.4f}, "
-                  f"Test {test_loss:.4f}, "
-                  f"Time {epoch_time:.1f}s")
+        # 定期评估测试集（不是每个epoch都评估）
+        if (epoch + 1) % eval_every == 0 or epoch == config['epochs'] - 1:
+            model.eval()
+            with torch.no_grad():
+                test_loss = loss_fn(model(test_x), test_y).item()
+            results['test_losses'].append(test_loss)
+            
+            if verbose:
+                print(f"  Epoch {epoch+1}/{config['epochs']}: "
+                      f"Train {train_loss/batch_count:.4f}, "
+                      f"Test {test_loss:.4f}, "
+                      f"Time {epoch_time:.1f}s")
+    
+    # 确保test_losses长度正确（最后一个epoch可能没有评估）
+    while len(results['test_losses']) < len(results['train_losses']):
+        results['test_losses'].append(results['test_losses'][-1] if results['test_losses'] else float('nan'))
     
     return results
 
