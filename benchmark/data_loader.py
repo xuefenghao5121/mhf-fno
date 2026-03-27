@@ -171,6 +171,7 @@ def adjust_resolution(data, target_resolution, is_2d=True):
     Args:
         data: torch.Tensor [..., H, W] 或 [..., L]
         target_resolution: 目标分辨率
+        is_2d: 是否为2D数据
     
     Returns:
         调整后的张量
@@ -178,14 +179,39 @@ def adjust_resolution(data, target_resolution, is_2d=True):
     if target_resolution is None:
         return data
     
-    # 获取当前分辨率
+    # 规范化数据维度
     if is_2d:
-        if data.ndim < 3:
-            raise ValueError(f"2D数据至少需要3个维度 [N, H, W]，但得到 {data.ndim} 维，形状: {data.shape}")
+        # 2D数据规范化
+        if data.ndim == 1:
+            raise ValueError(f"2D数据维度过低，形状: {data.shape}。期望格式: [N, H, W] 或 [N, C, H, W]")
+        elif data.ndim == 2:
+            # [H, W] -> [1, 1, H, W]
+            data = data.unsqueeze(0).unsqueeze(0)
+        elif data.ndim == 3:
+            # [N, H, W] -> [N, 1, H, W]
+            data = data.unsqueeze(1)
+        # 4D [N, C, H, W] 不需要处理
         current_res = data.shape[-2]
     else:
-        if data.ndim < 2:
-            raise ValueError(f"1D数据至少需要2个维度 [N, L]，但得到 {data.ndim} 维，形状: {data.shape}")
+        # 1D数据规范化
+        if data.ndim == 0:
+            raise ValueError(f"1D数据是标量，形状: {data.shape}。期望格式: [N, L] 或 [N, C, L]")
+        elif data.ndim == 1:
+            # [L] -> [1, 1, L] (单样本)
+            data = data.unsqueeze(0).unsqueeze(0)
+        elif data.ndim == 2:
+            # 需要判断是 [N, L] 还是 [L, N]
+            # 通常情况下，如果第一维远小于第二维，可能是 [N, L]
+            # 如果两者相差不大，可能需要更多信息
+            dim0, dim1 = data.shape
+            if dim0 <= dim1 and dim0 < 100:
+                # [N, L] -> [N, 1, L]
+                data = data.unsqueeze(1)
+            else:
+                # 可能是 [L, N] 格式，需要转置
+                print(f"⚠️  检测到可能非标准格式 [{dim0}, {dim1}]，尝试转置")
+                data = data.T.unsqueeze(1)
+        # 3D [N, C, L] 不需要处理
         current_res = data.shape[-1]
     
     # 如果已经是目标分辨率，直接返回
