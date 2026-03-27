@@ -268,16 +268,31 @@ def get_dataset_config(dataset_name):
 def run_benchmark(dataset_name, config):
     """运行单个数据集的基准测试"""
     
-    # 加载数据 - 使用新的通用数据加载器
+    # 加载数据 - 使用 NeuralOperator 2.0.0 数据加载器 (v1.6.0)
+    # resolution 现在是必需参数
+    if config.get('resolution') is None:
+        # 设置默认分辨率
+        if dataset_name == 'navier_stokes':
+            resolution = 64
+        elif dataset_name == 'darcy':
+            resolution = 64
+        elif dataset_name == 'burgers':
+            resolution = 1024  # Burgers 通常是 1D，用较高分辨率
+        else:
+            resolution = 64
+    else:
+        resolution = config['resolution']
+    
+    print(f"\n📊 加载数据集: {dataset_name}")
+    print(f"   分辨率: {resolution}")
+    print(f"   训练样本: {config['n_train']}")
+    print(f"   测试样本: {config['n_test']}")
+    
     data = load_dataset(
         dataset_name=dataset_name,
-        data_format=config.get('data_format', 'pt'),
-        train_path=config.get('train_path'),
-        test_path=config.get('test_path'),
-        data_path=config.get('data_path'),
         n_train=config['n_train'],
         n_test=config['n_test'],
-        resolution=config.get('resolution'),
+        resolution=resolution,
     )
     
     if data is None:
