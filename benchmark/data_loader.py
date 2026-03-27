@@ -1,5 +1,5 @@
 """
-MHF-FNO 数据加载器 (v1.6.1)
+MHF-FNO 数据加载器 (v1.6.1 - Bugfix)
 
 支持多种数据源：
 1. NeuralOperator 官方数据集 (NavierStokes, Darcy)
@@ -21,7 +21,7 @@ MHF-FNO 数据加载器 (v1.6.1)
     >>>     download=False,
     >>> )
     >>>
-    >>> # 2. 加载客户提供的 H5 文件
+    >>> # 2. 加载客户提供的 H5 文件 (train/test分离)
     >>> train_x, train_y, test_x, test_y, info = load_dataset(
     >>>     dataset_name='custom',
     >>>     data_format='h5',
@@ -60,6 +60,18 @@ try:
     HAS_H5PY = True
 except ImportError:
     HAS_H5PY = False
+
+
+def _check_file_exists(file_path: str) -> None:
+    """检查文件是否存在"""
+    if not Path(file_path).exists():
+        raise FileNotFoundError(f"文件不存在: {file_path}")
+
+
+def _check_tensor_not_empty(tensor: torch.Tensor, name: str) -> None:
+    """检查tensor是否为空"""
+    if tensor.shape[0] == 0:
+        raise ValueError(f"{name} 为空，shape[0] = 0")
 
 
 def load_dataset(
@@ -120,7 +132,7 @@ def load_dataset(
         >>>     n_train=1000, n_test=200,
         >>> )
     """
-    print(f"\\n📊 加载数据集: {dataset_name}")
+    print(f"\n📊 加载数据集: {dataset_name}")
     print(f"   配置: n_train={n_train}, n_test={n_test}, resolution={resolution}")
 
     # 客户自定义数据集
@@ -157,6 +169,10 @@ def _load_custom(
     print(f"   训练数据: {train_path}")
     print(f"   测试数据: {test_path}")
 
+    # 检查文件存在性
+    _check_file_exists(train_path)
+    _check_file_exists(test_path)
+
     # H5 格式
     if data_format.lower() in ['h5', 'hdf5']:
         return _load_h5_custom(train_path, test_path, n_train, n_test, resolution, **kwargs)
@@ -188,51 +204,66 @@ def _load_h5_custom(
     with h5py.File(train_path, 'r') as f:
         print(f"   训练文件结构: {list(f.keys())}")
 
-        if 'x' in f and 'y' in f:
-            train_x = f['x'][:]
-            train_y = f['y'][:]
-        elif 'u' in f:
-            data = f['u'][:]
-            if data.ndim == 4:
-                train_x = data[:, 0, :, :]
-                train_y = data[:, -1, :, :]
+        try:
+            if 'x' in f and 'y' in f:
+                train_x = f['x'][:]
+                train_y = f['y'][:]
+            elif 'u' in f:
+                data = f['u'][:]
+                if data.ndim == 4:  # [N, T, H, W] (PDEBench格式）
+                    train_x = data[:, 0, :, :]  # 初始状态
+                    train_y = data[:, -1, :, :]  # 最终状态
+                else:
+                    train_x = data
+                    train_y = data
             else:
-                train_x = data
-                train_y = data
-        else:
-            keys = list(f.keys())
-            train_x = f[keys[0]][:]
-            train_y = f[keys[-1]][:]
+                # 使用第一个数据集作为 x 和 y
+                keys = list(f.keys())
+                if len(keys) == 0:
+                    raise ValueError(f"训练文件为空: {train_path}")
+                train_x = f[keys[0]][:]
+                train_y = f[keys[-1]][:]
+        except Exception as e:
+            raise ValueError(f"加载训练文件失败: {train_path}, 错误: {str(e)}")
 
     # 加载测试数据
     with h5py.File(test_path, 'r') as f:
         print(f"   测试文件结构: {list(f.keys())}")
 
-        if 'x' in f and 'y' in f:
-            test_x = f['x'][:]
-            test_y = f['y'][:]
-        elif 'u' in f:
-            data = f['u'][:]
-            if data.ndim == 4:
-                test_x = data[:, 0, :, :]
-                test_y = data[:, -1, :, :]
+        try:
+            if 'x' in f and 'y' in f:
+                test_x = f['x'][:]
+                test_y = f['y'][:]
+            elif 'u' in f:
+                data = f['u'][:]
+                if data.ndim == 4:
+                    test_x = data[:, 0, :, :]
+                    test_y = data[:, -1, :, :]
+                else:
+                    test_x = data
+                    test_y = data
             else:
-                test_x = data
-                test_y = data
-        else:
-            keys = list(f.keys())
-            test_x = f[keys[0]][:]
-            test_y = f[keys[-1]][:]
+                keys = list(f.keys())
+                if len(keys) == 0:
+                    raise ValueError(f"测试文件为空: {test_path}")
+                test_x = f[keys[0]][:]
+                test_y = f[keys[-1]][:]
+        except Exception as e:
+            raise ValueError(f"加载测试文件失败: {test_path}, 错误: {str(e)}")
 
+    # 转换为 torch.Tensor
     train_x = torch.as_tensor(train_x, dtype=torch.float32)
     train_y = torch.as_tensor(train_y, dtype=torch.float32)
     test_x = torch.as_tensor(test_x, dtype=torch.float32)
     test_y = torch.as_tensor(test_y, dtype=torch.float32)
 
+    # 自动检测维度
     if is_2d is None:
         is_2d = train_x.ndim >= 3 and train_x.shape[-1] == train_x.shape[-2]
 
+    # 确保维度正确
     if is_2d:
+        # 2D: [N, H, W] -> [N, 1, H, W]
         if train_x.ndim == 3:
             train_x = train_x.unsqueeze(1)
             train_y = train_y.unsqueeze(1)
@@ -240,6 +271,7 @@ def _load_h5_custom(
             test_x = test_x.unsqueeze(1)
             test_y = test_y.unsqueeze(1)
     else:
+        # 1D: [N, L] -> [N, 1, L]
         if train_x.ndim == 2:
             train_x = train_x.unsqueeze(1)
             train_y = train_y.unsqueeze(1)
@@ -247,10 +279,24 @@ def _load_h5_custom(
             test_x = test_x.unsqueeze(1)
             test_y = test_y.unsqueeze(1)
 
+    # 限制样本数
     train_x = train_x[:n_train]
     train_y = train_y[:n_train]
     test_x = test_x[:n_test]
     test_y = test_y[:n_test]
+
+    # 检查数据是否为空
+    _check_tensor_not_empty(train_x, "train_x")
+    _check_tensor_not_empty(train_y, "train_y")
+    _check_tensor_not_empty(test_x, "test_x")
+    _check_tensor_not_empty(test_y, "test_y")
+
+    # 分分辨率调整
+    if resolution is not None:
+        current_res = train_x.shape[-1]
+        if current_res != resolution:
+            print(f"   ⚠️  调整分辨率: {current_res} -> {resolution}")
+            # TODO: 添加分辨率调整逻辑（上采样/下采样）
 
     print(f"   ✅ 数据加载成功")
     print(f"      train_x: {train_x.shape}")
@@ -267,7 +313,7 @@ def _load_h5_custom(
         'output_channels': train_y.shape[1],
     }
 
-    return train_x: train_y, test_x, test_y, info
+    return train_x, train_y, test_x, test_y, info
 
 
 def _load_pt_custom(
@@ -281,35 +327,61 @@ def _load_pt_custom(
     """从 PT 文件加载客户数据集"""
     print(f"   使用 torch.load 加载 PT 文件...")
 
-    train_data = torch.load(train_path, map_location='cpu')
+    # 加载训练数据
+    try:
+        train_data = torch.load(train_path, map_location='cpu')
+    except Exception as e:
+        raise ValueError(f"加载训练文件失败: {train_path}, 错误: {str(e)}")
 
-    if isinstance(train_data, dict):
-        train_x = train_data.get('x', train_data.get('input'))
-        train_y = train_data.get('y', train_data.get('output', train_x))
-    elif isinstance(train_data, (tuple, list)):
-        train_x, train_y = train_data
-    else:
-        train_x = train_data
-        train_y = train_data
+    # 判断格式
+    try:
+        if isinstance(train_data, dict):
+            train_x = train_data.get('x', train_data.get('input'))
+            if train_x is None:
+                raise ValueError("字典中未找到 'x' 或 'input' 键")
+            train_y = train_data.get('y', train_data.get('output', train_x))
+        elif isinstance(train_data, (tuple, list)):
+            if len(train_data) < 2:
+                raise ValueError(f"元组/列表长度不足: {len(train_data)} < 2")
+            train_x, train_y = train_data[0], train_data[1]
+        else:
+            train_x = train_data
+            train_y = train_data
+    except Exception as e:
+        raise ValueError(f"解析训练文件数据失败: {train_path}, 错误: {str(e)}")
 
-    test_data = torch.load(test_path, map_location='cpu')
+    # 加载测试数据
+    try:
+        test_data = torch.load(test_path, map_location='cpu')
+    except Exception as e:
+        raise ValueError(f"加载测试文件失败: {test_path}, 错误: {str(e)}")
 
-    if isinstance(test_data, dict):
-        test_x = test_data.get('x', test_data.get('input'))
-        test_y = test_data.get('y', test_data.get('output', test_x))
-    elif isinstance(test_data, (tuple, list)):
-        test_x, test_y = test_data
-    else:
-        test_x = test_data
-        test_y = test_data
+    try:
+        if isinstance(test_data, dict):
+            test_x = test_data.get('x', test_data.get('input'))
+            if test_x is None:
+                raise ValueError("字典中未找到 'x' 或 'input' 键")
+            test_y = test_data.get('y', test_data.get('output', test_x))
+        elif isinstance(test_data, (tuple, list)):
+            if len(test_data) < 2:
+                raise ValueError(f"元组/列表长度不足: {len(test_data)} < 2")
+            test_x, test_y = test_data[0], test_data[1]
+        else:
+            test_x = test_data
+            test_y = test_data
+    except Exception as e:
+        raise ValueError(f"解析测试文件数据失败: {test_path}, 错误: {str(e)}")
 
+    # 转换为 float32
     train_x = train_x.float()
     train_y = train_y.float()
     test_x = test_x.float()
     test_y = test_y.float()
 
+    # 自动检测维度
     is_2d = train_x.ndim >= 3 and train_x.shape[-1] == train_x.shape[-2]
 
+    # 确保维度正确
     if is_2d:
         if train_x.ndim == 3:
             train_x = train_x.unsqueeze(1)
@@ -325,10 +397,17 @@ def _load_pt_custom(
             test_x = test_x.unsqueeze(1)
             test_y = test_y.unsqueeze(1)
 
+    # 限制样本数
     train_x = train_x[:n_train]
     train_y = train_y[:n_train]
     test_x = test_x[:n_test]
     test_y = test_y[:n_test]
+
+    # 检查数据是否为空
+    _check_tensor_not_empty(train_x, "train_x")
+    _check_tensor_not_empty(train_y, "train_y")
+    _check_tensor_not_empty(test_x, "test_x")
+    _check_tensor_not_empty(test_y, "test_y")
 
     print(f"   ✅ 数据加载成功")
     print(f"      train_x: {train_x.shape}")
@@ -367,6 +446,7 @@ def _load_navier_stokes(
     print(f"   root_dir: {root_dir}")
     print(f"   download: {download}")
 
+    # 创建数据集对象
     dataset = NavierStokesDataset(
         root_dir=root_dir,
         n_train=n_train,
@@ -384,9 +464,11 @@ def _load_navier_stokes(
     print(f"      训练集大小: {len(dataset.train_db)}")
     print(f"      测试集大小: {len(dataset.test_dbs[resolution])}")
 
+    # 加载数据
     train_data = dataset.train_db[:]
     test_data = dataset.test_dbs[resolution][:]
 
+    # 提取 x 和 y
     if isinstance(train_data, (tuple, list)):
         train_x, train_y = train_data
     else:
@@ -399,11 +481,13 @@ def _load_navier_stokes(
         test_x = test_data
         test_y = test_data
 
+    # 转换为 torch.Tensor
     train_x = torch.as_tensor(train_x, dtype=torch.float32)
     train_y = torch.as_tensor(train_y, dtype=torch.float32)
-    test_x = torch.as_tensor(test_data, dtype=torch.float32)
+    test_x = torch.as_tensor(test_x, dtype=torch.float32)
     test_y = torch.as_tensor(test_y, dtype=torch.float32)
 
+    # 确保维度正确 [N, C, H, W]
     if train_x.ndim == 3:
         train_x = train_x.unsqueeze(1)
         train_y = train_y.unsqueeze(1)
@@ -411,9 +495,15 @@ def _load_navier_stokes(
         test_x = test_x.unsqueeze(1)
         test_y = test_y.unsqueeze(1)
 
+    # 检查数据是否为空
+    _check_tensor_not_empty(train_x, "train_x")
+    _check_tensor_not_empty(train_y, "train_y")
+    _check_tensor_not_empty(test_x, "test_x")
+    _check_tensor_not_empty(test_y, "test_y")
+
     print(f"   ✅ 数据加载成功")
     print(f"      train_x: {train_x.shape}")
-    print(f"      train_y: {train{y.shape}")
+    print(f"      train_y: {train_y.shape}")
     print(f"      test_x: {test_x.shape}")
     print(f"      test_y: {test_y.shape}")
 
@@ -449,6 +539,7 @@ def _load_darcy(
     print(f"   root_dir: {root_dir}")
     print(f"   download: {download}")
 
+    # 创建数据集对象
     dataset = DarcyDataset(
         root_dir=root_dir,
         n_train=n_train,
@@ -466,9 +557,11 @@ def _load_darcy(
     print(f"      训练集大小: {len(dataset.train_db)}")
     print(f"      测试集大小: {len(dataset.test_dbs[resolution])}")
 
+    # 加载数据
     train_data = dataset.train_db[:]
     test_data = dataset.test_dbs[resolution][:]
 
+    # 提取 x 和 y
     if isinstance(train_data, (tuple, list)):
         train_x, train_y = train_data
     else:
@@ -481,17 +574,25 @@ def _load_darcy(
         test_x = test_data
         test_y = test_data
 
+    # 转换为 torch.Tensor
     train_x = torch.as_tensor(train_x, dtype=torch.float32)
     train_y = torch.as_tensor(train_y, dtype=torch.float32)
-    test_x = torch.as_tensor(test_data, dtype=torch.float32)
+    test_x = torch.as_tensor(test_x, dtype=torch.float32)
     test_y = torch.as_tensor(test_y, dtype=torch.float32)
 
+    # 确保维度正确 [N, C, H, W]
     if train_x.ndim == 3:
         train_x = train_x.unsqueeze(1)
         train_y = train_y.unsqueeze(1)
     if test_x.ndim == 3:
         test_x = test_x.unsqueeze(1)
         test_y = test_y.unsqueeze(1)
+
+    # 检查数据是否为空
+    _check_tensor_not_empty(train_x, "train_x")
+    _check_tensor_not_empty(train_y, "train_y")
+    _check_tensor_not_empty(test_x, "test_x")
+    _check_tensor_not_empty(test_y, "test_y")
 
     print(f"   ✅ 数据加载成功")
     print(f"      train_x: {train_x.shape}")
