@@ -2,17 +2,24 @@
 """
 MHF-FNO 数据生成脚本
 
-自生成 PDE 测试数据，避免下载 PDEBench 数据集的网络问题。
+统一生成所有 PDE 测试数据，避免下载依赖。
 
 支持的数据集:
 - Darcy Flow 2D: 椭圆 PDE 求解
 - Burgers 1D: 对流扩散方程
-- Navier-Stokes 2D: 流体方程
+- Navier-Stokes 2D: 流体方程（含时间序列速度场）
 
 使用方法:
-    python generate_data.py --dataset darcy --n_train 1000 --n_test 200
-    python generate_data.py --dataset burgers --n_train 1000
-    python generate_data.py --dataset navier_stokes --n_train 500 --resolution 64
+    # 生成 Darcy Flow
+    python generate_data.py --dataset darcy --n_train 1000 --resolution 64
+    
+    # 生成 Burgers 1D
+    python generate_data.py --dataset burgers --n_train 1000 --resolution 1024
+    
+    # 生成 Navier-Stokes（含时间序列）
+    python generate_data.py --dataset navier_stokes --n_train 200 --resolution 64 --time_steps 20
+    
+    # 生成所有数据集
     python generate_data.py --dataset all
 
 输出格式: PT 格式，兼容 run_benchmarks.py

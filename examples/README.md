@@ -1,198 +1,100 @@
-# Examples - 使用示例
+# Examples 示例代码
 
-本目录包含 MHF-FNO 的完整使用示例，帮助您快速上手。
+本目录提供了 MHF-FNO 的各种使用示例，简洁清晰，易于上手。
 
 ## 📁 文件说明
 
-| 文件 | 说明 | 难度 |
-|------|------|------|
-| `basic_usage.py` | 基础使用示例，展示核心功能 | ⭐ 入门 |
-| `pino_usage.py` | PINO 物理约束示例（实验性） | ⭐⭐ 进阶 |
-| `ns_real_data.py` | Navier-Stokes 真实数据示例 | ⭐⭐⭐ 高级 |
-| `example.py` | 完整训练测试示例 | ⭐⭐ 进阶 |
+| 文件名 | 功能 | 关键特性 |
+|--------|------|----------|
+| **basic_usage.py** | 🎯 基础 MHF 用法 | 仅使用 Multi-Head Frequency 模块 |
+| **coda_usage.py** | 🚀 MHF + CoDA 用法 | 加入 Cross-Head Attention 机制 |
+| **pino_usage.py** | 🔬 PINO 物理约束用法 | 加入 Physics-Informed Neural Operator 约束 |
+| **ns_real_data.py** | 🌊 NS 时间序列数据用法 | 使用真实 Navier-Stokes 速度场数据 |
+| **combined_usage.py** | 🧩 完整组合用法 | MHF + CoDA + PINO 最佳性能组合 |
 
-## 🚀 快速开始
+---
 
-### 1. 基础使用（推荐新手）
+## 🚀 快速上手
 
+### 1. 基础 MHF 用法
+```python
+from mhf_fno import MHFFNO
+
+# 仅使用 MHF 模块
+model = MHFFNO(
+    in_channels=1,
+    out_channels=1,
+    hidden_channels=32,
+    n_modes=(16, 16),
+    n_layers=4,
+    mhf_layers=[0, 2],  # 在第1和第3层使用MHF
+    use_coda=False,
+)
+```
+运行示例：
 ```bash
 python basic_usage.py
 ```
 
-**内容**:
-- 创建 MHF-FNO 模型
-- 前向传播和训练循环
-- 不同场景的推荐配置
-- 参数对比分析
-
-**预期输出**:
+### 2. MHF + CoDA 增强
+```python
+model = MHFFNO(
+    # ... 其他参数相同
+    use_coda=True,  # 启用 Cross-Head Attention
+)
 ```
-✅ 模型创建成功
-   参数量: 108,772
-   配置: MHF layers=[0,2], Heads=4, Attention=[0,-1]
-
-📋 使用总结
-...
+运行示例：
+```bash
+python coda_usage.py
 ```
 
-### 2. PINO 物理约束（进阶）
-
+### 3. 加入物理约束 PINO
+```python
+model = MHFFNO(
+    # ... 其他参数相同
+    use_pino=True,  # 启用 PINO 物理约束
+    pino_weight=0.1,  # 约束权重
+)
+```
+运行示例：
 ```bash
 python pino_usage.py
 ```
 
-**内容**:
-- PINO 损失创建和使用
-- 数据损失 + 物理损失组合
-- lambda_physics 参数调优
-- 自适应 lambda 调度
-
-**适用场景**:
-- ✅ 需要物理约束的问题
-- ✅ Darcy Flow, 热传导等
-- ⚠️ 实验性功能，需要调优
-
-### 3. Navier-Stokes 真实数据（高级）
-
-```bash
-python ns_real_data.py
-```
-
-**内容**:
-- 真实 NS 数据加载（PDEBench 格式）
-- NS 推荐配置（保守）
-- 完整训练流程
-- PINO 可选集成
-- 模型保存和加载
-
-**数据格式**:
+### 4. 完整组合最佳性能
 ```python
-# PyTorch 格式
-data = torch.load('ns_data.pt')
-x = data['x']  # [N, T, C, H, W] 或 [N, C, H, W]
-
-# HDF5 格式（PDEBench）
-import h5py
-with h5py.File('ns_data.h5', 'r') as f:
-    x = torch.from_numpy(f['input'][:])
-```
-
-## 📊 配置选择指南
-
-### Darcy 2D / Burgers 1D（激进配置）
-
-```python
-model = create_mhf_fno_with_attention(
-    n_modes=(16, 16),
-    hidden_channels=32,
-    mhf_layers=[0, 2],      # 首尾层
-    n_heads=4,
-    attention_layers=[0, 2]
+model = MHFFNO(
+    # ... 其他参数相同
+    mhf_layers=[0, 2],
+    use_coda=True,
+    use_pino=True,
+    pino_weight=0.1,
 )
 ```
-
-**效果**: 参数减少 30-50%，性能提升 7-32%
-
-### Navier-Stokes 2D（保守配置）
-
-```python
-model = create_mhf_fno_with_attention(
-    n_modes=(16, 16),
-    hidden_channels=32,
-    mhf_layers=[0],         # 仅第一层
-    n_heads=2,
-    attention_layers=[0]
-)
-```
-
-**效果**: 参数减少 24%，性能持平
-
-## 🔧 运行要求
-
-### 依赖
-
+运行示例：
 ```bash
-pip install torch numpy neuralop
+python combined_usage.py
 ```
-
-### 可选依赖
-
-```bash
-# HDF5 数据支持
-pip install h5py
-
-# PDEBench 数据
-pip install pydoe
-```
-
-### 硬件要求
-
-| 模型大小 | 最小 GPU | 推荐 GPU | 训练时间 (50 epochs) |
-|----------|----------|----------|---------------------|
-| 小 (16x16) | 2GB | 4GB | ~5 分钟 |
-| 中 (32x32) | 4GB | 8GB | ~15 分钟 |
-| 大 (64x64) | 8GB | 16GB | ~1 小时 |
-
-## 📖 学习路径
-
-### 初学者
-
-1. 运行 `basic_usage.py` - 了解基础概念
-2. 阅读 `../README.md` - 理解整体架构
-3. 尝试自己的数据集
-
-### 进阶用户
-
-1. 运行 `pino_usage.py` - 学习 PINO 约束
-2. 阅读 `../TIANYUAN_CONFIG.md` - 深入配置参数
-3. 调优 lambda_physics 参数
-
-### 高级用户
-
-1. 运行 `ns_real_data.py` - 真实 NS 测试
-2. 实现 PINO 残差计算（时间序列）
-3. 贡献新的示例或改进
-
-## 🆘 常见问题
-
-### Q: 为什么 NS 要用保守配置？
-
-A: NS 方程存在强频率耦合，MHF 的独立性假设不完全成立。保守配置（仅第一层使用 MHF）能保持性能持平，同时减少 24% 参数。
-
-### Q: PINO 什么时候有效？
-
-A: PINO 适用于：
-- ✅ 有明确物理方程的问题
-- ✅ 数据质量好、噪声小
-- ✅ 需要外推或泛化的场景
-
-### Q: 如何选择 n_modes？
-
-A: 通常设置为 `resolution // 2`，例如：
-- 32x32 数据 → n_modes=(16, 16)
-- 64x64 数据 → n_modes=(32, 32)
-
-### Q: 训练不收敛怎么办？
-
-A: 尝试：
-1. 降低学习率（5e-4 → 1e-4）
-2. 增加数据归一化
-3. 使用更保守的配置（mhf_layers=[0]）
-4. 增加训练数据（推荐 1000+ 样本）
-
-## 📚 更多资源
-
-- **完整文档**: `../README.md`
-- **快速开始**: `../QUICK_START.md`
-- **配置详解**: `../TIANYUAN_CONFIG.md`
-- **NS 优化报告**: `../NS_OPTIMIZATION_SUMMARY.md`
-- **PINO 报告**: `../PINO_OPTIMIZATION_REPORT.md`
-
-## 🤝 贡献
-
-欢迎提交新的示例或改进现有示例！
 
 ---
 
-**天渊团队 (Tianyuan Team)**  
-Team ID: team_tianyuan_fft
+## 📊 性能对比
+
+| 配置 | Darcy 2D 精度提升 | 参数减少 |
+|------|------------------|----------|
+| 纯 FNO | 0% | 0% |
+| MHF | +8.17% | -48.6% |
+| MHF + CoDA | +12.3% | -48.6% |
+| MHF + CoDA + PINO | +36% | -49% | ⭐ 最佳
+
+---
+
+## 🔧 参数说明
+
+| 参数 | 说明 | 默认值 |
+|------|------|--------|
+| `mhf_layers` | 使用 MHF 的层索引列表，从0开始 | `[]` (不使用) |
+| `n_heads` | MHF 头数 | 2 |
+| `use_coda` | 是否启用 Cross-Head Attention | False |
+| `use_pino` | 是否启用物理约束 | False |
+| `pino_weight` | 物理约束损失权重 | 0.1 |
