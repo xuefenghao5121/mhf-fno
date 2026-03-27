@@ -2,6 +2,108 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.1] - 2026-03-27
+
+### Added ⭐ Major Feature: Custom Dataset Support
+- **Support for customer-provided datasets** (H5/PT files with train/test separation)
+  - `dataset_name='custom'`: Load customer datasets from local files
+  - `data_format='h5'` | `'pt'` | `'pth'`: Specify file format
+  - `train_path`: Path to training data file
+  - `test_path`: Path to testing data file
+
+### Changed
+- **Data loader architecture**: Extended to support multiple data sources
+  - NeuralOperator official datasets: `navier_stokes`, `darcy` (existing)
+  - Customer custom datasets: `custom` with H5/PT files (new)
+  - Unified API: All data sources use same `load_dataset()` interface
+
+### Added
+- **New functions**:
+  - `_load_custom()`: Router for customer datasets
+  - `_load_h5_custom()`: Load from H5 files (supports multiple formats)
+  - `_load_pt_custom()`: Load from PT/Torch files (supports dict/tuple/tensor)
+
+### Fixed
+- **Network access restrictions**: Default `download=False` to avoid Zenodo access issues
+  - Not all environments can access Zenodo (intranet, proxy, restricted networks)
+  - Users can manually download datasets and load locally
+  - Automatic download only enabled with explicit `download=True`
+
+### Documentation
+- **README.md**: Complete rewrite with comprehensive documentation
+  - NeuralOperator official datasets guide (download + manual mode)
+  - **Customer datasets guide** ⭐ NEW (H5/PT file loading)
+  - Supported dataset formats comparison table
+  - Multiple data sources comparison table
+  - Network environment notes and restrictions
+  - Common issues and solutions
+
+### Data Format Support
+
+**H5 Format** (Customer datasets):
+- `x`, `y` datasets (standard format)
+- `u` time series [N, T, H, W] (PDEBench format)
+- Arbitrary key names (auto-detection)
+
+**PT Format** (Customer datasets):
+- Dictionary: `{'x': ..., 'y': ...}` or `{'input': ..., 'output': ...}`
+- Tuple: `(x, y)`
+- Direct tensor: `x = y`
+
+### Usage Examples
+
+**NeuralOperator official datasets**:
+```python
+data = load_dataset(
+    dataset_name='navier_stokes',
+    n_train=1000, n_test=200, resolution=64,
+    download=False,  # Manual download mode (default)
+)
+```
+
+**Customer H5 datasets** ⭐ NEW:
+```python
+data = load_dataset(
+    dataset_name='custom',
+    data_format='h5',
+    train_path='./data/customer_train.h5',
+    test_path='./data/customer_test.h5',
+    n_train=1000, n_test=200, resolution=64,
+)
+```
+
+**Customer PT datasets** ⭐ NEW:
+```python
+data = load_dataset(
+    dataset_name='custom',
+    data_format='pt',
+    train_path='./data/customer_train.pt',
+    test_path='./data/customer_test.pt',
+    n_train=1000, n_test=200,
+)
+```
+
+### Breaking Changes
+- **None**: Fully backward compatible with v1.6.0
+
+### Migration Guide
+If you were using v1.6.0, no changes needed for NeuralOperator datasets.
+For customer datasets, use the new `dataset_name='custom'` API:
+
+```python
+# vold (not supported in v1.6.0)
+# Direct file loading required NeuralOperator wrapper
+
+# v1.6.1 (NEW)
+data = load_dataset(
+    dataset_name='custom',
+    data_format='h5',
+    train_path='./data/my_train.h5',
+    test_path='./data/my_test.h5',
+    n_train=1000, n_test=200,
+)
+```
+
 ## [1.6.0] - 2026-03-27
 
 ### Refactoring
