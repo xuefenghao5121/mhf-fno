@@ -193,6 +193,8 @@ def get_dataset_config(dataset_name):
     """
     根据数据集返回最佳MHF-FNO配置
     
+    注意：Burgers 有 1D 和 2D 两个版本，需要根据实际数据维度判断
+    
     Args:
         dataset_name: 'darcy', 'burgers', 'navier_stokes'
     
@@ -206,6 +208,7 @@ def get_dataset_config(dataset_name):
         'mhf_layers': [],
         'n_heads': 4,
         'pino_weight': 0.1,
+        'auto_detect_2d': False,  # 自动检测2D数据
     }
     
     if dataset_name == 'navier_stokes':
@@ -217,6 +220,7 @@ def get_dataset_config(dataset_name):
             'mhf_layers': [0, 2],   # 在第1和第3层使用MHF
             'pino_weight': 0.1,
             'n_heads': 4,
+            'auto_detect_2d': False,  # NS肯定是2D
         })
     elif dataset_name == 'darcy':
         # Darcy数据集：MHF + CoDA
@@ -226,15 +230,17 @@ def get_dataset_config(dataset_name):
             'use_coda': True,
             'mhf_layers': [0, 2],
             'n_heads': 4,
+            'auto_detect_2d': False,  # Darcy肯定是2D
         })
     elif dataset_name == 'burgers':
-        # Burgers数据集：MHF
+        # Burgers 数据集：可能是 1D 或 2D，需要根据数据维度判断
         # 简单对流扩散，CoDA和PINO收益有限
         config.update({
             'use_pino': False,
             'use_coda': False,
             'mhf_layers': [0],
             'n_heads': 2,
+            'auto_detect_2d': True,  # ✅ 自动检测维度
         })
     
     return config
