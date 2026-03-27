@@ -1,1118 +1,277 @@
 """
-MHF-FNO 通用数据加载器
+MHF-FNO 数据加载器 (复用 NeuralOperator 2.0.0)
 
-支持多种数据格式:
-1. PT 格式:
-   - 单文件: 一个文件包含 train+test
-   - 双文件: train.pt + test.pt (两个独立文件)
-2. H5 格式 (PDEBench / Zenodo):
-   - 单文件: 一个文件包含 train+test
-   - 双文件: train.h5 + test.h5 (Zenodo 下载格式，训练集和测试集分开)
+NeuralOperator 2.0.0 已经有完整、经过测试的数据加载模块：
+- NavierStokesDataset: Navier-Stokes 数据集
+- DarcyDataset: Darcy Flow 数据集
+- PTDataset: 通用的 PT 数据加载器
 
-使用方法:
-    from data_loader import load_dataset
-    train_x, train_y, test_x, test_y, info = load_dataset(
-        dataset_name='darcy',
-        data_format='h5',
-        train_path='./data/2D_DarcyFlow_Train.h5',
-        test_path='./data/2D_DarcyFlow_Test.h5',
-        n_train=1000,
-        n_test=200,
-    )
+复用这些模块的好处：
+1. ✅ 经过充分测试，稳定可靠
+2. ✅ 支持所有数据格式（Zenodo、PDEBench等）
+3. ✅ 自动下载和解压
+4. ✅ 统一的接口和输出格式
+5. ✅ 减少维护成本
 
-支持的数据集 (Zenodo https://zenodo.org/records/13355846:
-- Burgers 1D:
-  - 1D_Burgers_Re1000_Train.h5
-  - 1D_Burgers_Re1000_Test.h5
-- Navier-Stokes 2D:
-  - 2D_NS_Re100_Train.h5
-  - 2D_NS_Re100_Test.h5
-- Darcy Flow 2D:
-  - 2D_DarcyFlow_Train.h5
-  - 2D_DarcyFlow_Test.h5
+使用示例:
+    >>> from data_loader import load_dataset
+    >>> 
+    >>> # 加载 Navier-Stokes 数据集
+    >>> train_x, train_y, test_x, test_y, info = load_dataset(
+    >>>     dataset_name='navier_stokes',
+    >>>     n_train=1000,
+    >>>     n_test=200,
+    >>>     resolution=64,
+    >>> )
+    >>> 
+    >>> # 从本地 H5 文件加载
+    >>> train_x, train_y, test_x, test_y, info = load_dataset(
+    >>>     dataset_name='navier_stokes',
+    >>>     data_format='h5',
+    >>>     train_path='./data/NS_Train.h5',
+    >>>     test_path='./data/NS_Test.h5',
+    >>>     n_train=1000,
+    >>>     n_test=200,
+    >>> )
 """
 
-import re
-import numpy as np
 import torch
+import numpy as np
+from pathlib import Path
+from typing import Union, Tuple, Dict, Optional
 
-# H5 支持
+try:
+    from neuralop.data.datasets import (
+        NavierStokesDataset,
+        DarcyDataset,
+        PTDataset
+    )
+    HAS_NEURALOP = True
+except ImportError:
+    HAS_NEURALOP = False
+
 try:
     import h5py
     HAS_H5PY = True
 except ImportError:
     HAS_H5PY = False
-    print("⚠️  h5py not installed, H5 format not available")
-    print("   Install: pip install h5py")
 
-
-# ============================================================================
-# 工具函数
-# ============================================================================
-
-def parse_resolution_from_filename(filename: str) -> int:
-    """
-    从文件名解析分辨率。
-    
-    支持的命名格式:
-    - darcy_train_16.pt -> 16
-    - ns_train_64.pt -> 64
-    - 2D_DarcyFlow_64x64_Train.h5 -> 64
-    - NavierStokes2d_128_Train.h5 -> 128
-    - 1024x1024_Darcy_Train.h5 -> 1024
-    - 1D_Burgers_Re1000_Train.h5 -> 1024 (Re后面是分辨率映射)
-    - 2D_NS_Re100_Train.h5 -> 64 (默认映射)
-    - 2D_DarcyFlow_64_Train.h5 -> 64
-    - file-2048x2048-train.h5 -> 2048 (连字符格式)
-    
-    Args:
-        filename: 文件名 (不含路径)
-    
-    Returns:
-        int: 解析出的分辨率，如果无法解析返回默认值 64
-    """
-    # 优先级 1: 匹配 "NxN" 格式 (如 64x64, 1024x1024)
-    # 匹配任意地方出现的 数字x数字
-    match_xy = re.search(r'(\d+)[xX](\d+)', filename)
-    if match_xy and match_xy.lastindex >= 1:
-        # 取第一个数字，因为通常两个方向分辨率相同
-        try:
-            num = int(match_xy.group(1))
-            # 过滤掉 1x1 这种极小值，继续找
-            if num > 8:  # 合理分辨率最小应该大于 8
-                return num
-        except (IndexError, ValueError):
-            pass
-    
-    # 优先级 2: 匹配下划线分隔的纯数字
-    # 收集所有下划线分隔的数字
-    all_matches = list(re.finditer(r'_(\d+)', filename, re.IGNORECASE))
-    for match in all_matches:
-        if match.lastindex >= 1:
-            try:
-                num = int(match.group(1))
-                # 过滤掉 1, 2 (这些通常是维度: 1D, 2D)
-                if num in [1, 2]:
-                    continue
-                if num > 0:
-                    return num
-            except (IndexError, ValueError):
-                continue
-    
-    # 优先级 3: 匹配连字符分隔的纯数字
-    # 匹配 "-数字" 或 "数字-" 或 "-数字-"
-    all_matches_hyphen = list(re.finditer(r'(?:^|-)(\d+)(?:$|-)', filename, re.IGNORECASE))
-    for match in all_matches_hyphen:
-        if match.lastindex >= 1:
-            try:
-                num = int(match.group(1))
-                if num in [1, 2]:
-                    continue
-                if num > 0:
-                    return num
-            except (IndexError, ValueError):
-                continue
-    
-    # 优先级 4: 匹配文件名开头的数字 (如 "4096_file.h5")
-    match_start = re.match(r'^(\d+)', filename)
-    if match_start:
-        try:
-            num = int(match_start.group(1))
-            if num > 8:  # 过滤掉开头的 1, 2
-                return num
-        except (IndexError, ValueError):
-            pass
-    
-    # 优先级 5: 尝试匹配 Re 后面的数字 (Burgers/NS: Re1000, Re100)
-    match_re = re.search(r'Re(\d+)', filename, re.IGNORECASE)
-    if match_re:
-        try:
-            # Re 后面的数字是雷诺数，对于 Burgers 这就是分辨率相关映射
-            # Burgers: Re1000 -> 1024, Re100 -> 128, Re10000 -> 2048
-            re_num = int(match_re.group(1))
-            if re_num >= 10000:
-                return 2048
-            elif re_num >= 1000:
-                return 1024
-            elif re_num >= 100:
-                return 128
-            elif re_num >= 10:
-                return 64
-        except (IndexError, ValueError):
-            pass
-    
-    # 优先级 6: 匹配任意孤立数字（最后尝试）
-    any_match = re.search(r'(\d+)', filename)
-    if any_match:
-        try:
-            num = int(any_match.group(1))
-            if num in [1, 2]:
-                # 找下一个
-                remaining = filename[any_match.end():]
-                any_match2 = re.search(r'(\d+)', remaining)
-                if any_match2:
-                    num2 = int(any_match2.group(1))
-                    if num2 > 8:
-                        return num2
-            elif num > 8:
-                return num
-        except (IndexError, ValueError):
-            pass
-    
-    # 默认返回 - 永远不会崩溃
-    print(f"⚠️  无法从文件名 '{filename}' 解析分辨率，使用默认值 64")
-    return 64
-
-
-def adjust_resolution(data, target_resolution, is_2d=True):
-    """
-    调整数据到目标分辨率。
-    
-    Args:
-        data: torch.Tensor [..., H, W] 或 [..., L]
-        target_resolution: 目标分辨率
-        is_2d: 是否为2D数据
-    
-    Returns:
-        调整后的张量
-    """
-    if target_resolution is None:
-        return data
-    
-    # 规范化数据维度
-    if is_2d:
-        # 2D数据规范化
-        if data.ndim == 1:
-            raise ValueError(f"2D数据维度过低，形状: {data.shape}。期望格式: [N, H, W] 或 [N, C, H, W]")
-        elif data.ndim == 2:
-            # [H, W] -> [1, 1, H, W]
-            data = data.unsqueeze(0).unsqueeze(0)
-        elif data.ndim == 3:
-            # [N, H, W] -> [N, 1, H, W]
-            data = data.unsqueeze(1)
-        # 4D [N, C, H, W] 不需要处理
-        current_res = data.shape[-2]
-    else:
-        # 1D数据规范化
-        if data.ndim == 0:
-            raise ValueError(f"1D数据是标量，形状: {data.shape}。期望格式: [N, L] 或 [N, C, L]")
-        elif data.ndim == 1:
-            # [L] -> [1, 1, L] (单样本)
-            data = data.unsqueeze(0).unsqueeze(0)
-        elif data.ndim == 2:
-            # 需要判断是 [N, L] 还是 [L, N]
-            # 通常情况下，如果第一维远小于第二维，可能是 [N, L]
-            # 如果两者相差不大，可能需要更多信息
-            dim0, dim1 = data.shape
-            if dim0 <= dim1 and dim0 < 100:
-                # [N, L] -> [N, 1, L]
-                data = data.unsqueeze(1)
-            else:
-                # 可能是 [L, N] 格式，需要转置
-                print(f"⚠️  检测到可能非标准格式 [{dim0}, {dim1}]，尝试转置")
-                data = data.T.unsqueeze(1)
-        # 3D [N, C, L] 不需要处理
-        current_res = data.shape[-1]
-    
-    # 如果已经是目标分辨率，直接返回
-    if current_res == target_resolution:
-        return data
-    
-    # 使用插值调整
-    if is_2d:
-        # [..., H, W] -> [..., target_resolution, target_resolution]
-        if data.ndim == 4:  # [N, C, H, W]
-            data = torch.nn.functional.interpolate(
-                data, size=(target_resolution, target_resolution),
-                mode='bilinear',
-                align_corners=False
-            )
-        elif data.ndim == 3:  # [N, H, W]
-            data = data.unsqueeze(1)
-            data = torch.nn.functional.interpolate(
-                data, size=(target_resolution, target_resolution),
-                mode='bilinear',
-                align_corners=False
-            )
-            data = data.squeeze(1)
-    else:
-        # 1D 插值
-        if data.ndim == 3:  # [N, C, L]
-            data = torch.nn.functional.interpolate(
-                data, size=(target_resolution,),
-                mode='linear',
-                align_corners=False
-            )
-        elif data.ndim == 2:  # [N, L]
-            data = data.unsqueeze(1)
-            data = torch.nn.functional.interpolate(
-                data, size=(target_resolution,),
-                mode='linear',
-                align_corners=False
-            )
-            data = data.squeeze(1)
-    
-    return data
-
-
-# ============================================================================
-# H5 加载函数
-# ============================================================================
-
-def find_first_dataset(obj):
-    """
-    递归查找第一个 dataset，跳过 group。
-    
-    Args:
-        obj: h5py 对象 (File 或 Group 或 Dataset)
-    
-    Returns:
-        h5py.Dataset: 找到的第一个 dataset
-    
-    Raises:
-        ValueError: 如果找不到任何 dataset
-    """
-    if isinstance(obj, h5py.Dataset):
-        return obj
-    
-    if isinstance(obj, h5py.Group):
-        # 检查group是否有keys
-        if len(obj.keys()) == 0:
-            raise ValueError(f"空 group '{obj.name}' 中找不到 dataset")
-        for key in obj.keys():
-            try:
-                result = find_first_dataset(obj[key])
-                if result is not None:
-                    return result
-            except ValueError:
-                continue
-    
-    # 如果走到这里，说明遍历完所有都没找到
-    raise ValueError("在 H5 文件中找不到任何 dataset")
-
-
-def find_all_datasets(obj, result_list=None):
-    """递归查找所有 datasets"""
-    if result_list is None:
-        result_list = []
-    
-    if isinstance(obj, h5py.Dataset):
-        result_list.append(obj)
-        return result_list
-    
-    if isinstance(obj, h5py.Group):
-        if len(obj.keys()) > 0:
-            for key in obj.keys():
-                find_all_datasets(obj[key], result_list)
-    
-    return result_list
-
-
-def load_h5_single_file(h5_path, n_train=1000, n_test=200, resolution=None, is_2d=True):
-    """
-    从单个 H5 文件加载数据 (PDEBench 原格式)。
-    
-    格式说明:
-    - 单个 H5 文件包含所有数据，前一半是输入，后一半是输出
-    
-    Args:
-        h5_path: H5 文件路径
-        n_train: 训练样本数
-        n_test: 测试样本数
-        resolution: 目标分辨率，如果为 None 不调整
-        is_2d: 是否是 2D 数据
-    
-    Returns:
-        train_x, train_y, test_x, test_y, info
-    """
-    if not HAS_H5PY:
-        raise ImportError("需要安装 h5py: pip install h5py")
-    
-    print(f"\n📊 从单文件 H5 加载: {h5_path}")
-    
-    x_data = None
-    y_data = None
-    
-    with h5py.File(h5_path, 'r') as f:
-        # 尝试不同数据键
-        if 'tensor' in f:
-            if isinstance(f['tensor'], h5py.Dataset):
-                data = f['tensor'][:]
-            else:
-                # tensor is a group, find first dataset inside
-                ds = find_first_dataset(f['tensor'])
-                data = ds[:]
-            if data is not None and data.shape[0] == 0:
-                raise ValueError(f"在文件 {h5_path} 中 tensor 数据集是空的")
-        elif 'data' in f:
-            if isinstance(f['data'], h5py.Dataset):
-                data = f['data'][:]
-            else:
-                ds = find_first_dataset(f['data'])
-                data = ds[:]
-            if data is not None and data.shape[0] == 0:
-                raise ValueError(f"在文件 {h5_path} 中 data 数据集是空的")
-        elif 'x' in f and 'y' in f:
-            # PDEBench 有些分开存储
-            if isinstance(f['x'], h5py.Dataset):
-                x_data = f['x'][:]
-                y_data = f['y'][:]
-            else:
-                # x and y are groups, find datasets inside
-                ds_x = find_first_dataset(f['x'])
-                ds_y = find_first_dataset(f['y'])
-                x_data = ds_x[:]
-                y_data = ds_y[:]
-            # 检查数据不为空
-            if x_data is None or x_data.shape[0] == 0:
-                raise ValueError(f"在文件 {h5_path} 中 x 数据集是空的")
-            if y_data is None or y_data.shape[0] == 0:
-                raise ValueError(f"在文件 {h5_path} 中 y 数据集是空的")
-            data = None
-        else:
-            # 尝试找到第一个 dataset (跳过 groups)
-            all_datasets = find_all_datasets(f)
-            if len(all_datasets) > 0:
-                if all_datasets[0].shape[0] == 0:
-                    raise ValueError(f"在文件 {h5_path} 中第一个 dataset 是空的")
-                data = all_datasets[0][:]
-            else:
-                raise ValueError(f"在文件 {h5_path} 中找不到可用的 dataset，所有键: {list(f.keys())}")
-    
-    if data is not None:
-        # 单个文件包含输入输出，分割
-        n_samples = data.shape[0]
-        split = n_samples // 2
-        x_data = data[:split]
-        y_data = data[split:]
-    
-    # 转换为 PyTorch 张量
-    x_data = torch.from_numpy(x_data).float()
-    y_data = torch.from_numpy(y_data).float()
-    
-    # 添加 channel 维度
-    if is_2d:
-        # [N, H, W] -> [N, 1, H, W]
-        if x_data.ndim == 3:
-            x_data = x_data.unsqueeze(1)
-            y_data = y_data.unsqueeze(1)
-    else:
-        # [N, L] -> [N, 1, L]
-        if x_data.ndim == 2:
-            x_data = x_data.unsqueeze(1)
-            y_data = y_data.unsqueeze(1)
-    
-    # 分割训练测试 - 添加边界检查
-    if x_data.shape[0] < n_train + n_test:
-        available = x_data.shape[0]
-        print(f"⚠️  警告: 请求总共 {n_train + n_test} 个样本，但文件只有 {available} 个，调整分割比例")
-        if available <= n_train:
-            n_train = available
-            n_test = 0
-        else:
-            n_test = available - n_train
-    
-    train_x = x_data[:n_train]
-    train_y = y_data[:n_train]
-    test_x = x_data[n_train:n_train+n_test]
-    test_y = y_data[n_train:n_train+n_test]
-    
-    # 调整分辨率
-    if resolution is not None:
-        train_x = adjust_resolution(train_x, resolution, is_2d=is_2d)
-        train_y = adjust_resolution(train_y, resolution, is_2d=is_2d)
-        test_x = adjust_resolution(test_x, resolution, is_2d=is_2d)
-        test_y = adjust_resolution(test_y, resolution, is_2d=is_2d)
-    
-    # 收集信息
-    if is_2d:
-        res = train_x.shape[-1]
-        info = {
-            'name': f'H5 2D ({h5_path.split("/")[-1]})',
-            'resolution': f'{res}x{res}',
-            'n_train': train_x.shape[0],
-            'n_test': test_x.shape[0],
-            'input_channels': train_x.shape[1],
-            'output_channels': train_y.shape[1],
-            'n_modes': (res // 2, res // 2) if is_2d else (res // 2,),
-        }
-    else:
-        res = train_x.shape[-1]
-        info = {
-            'name': f'H5 1D ({h5_path.split("/")[-1]})',
-            'resolution': f'{res}',
-            'n_train': train_x.shape[0],
-            'n_test': test_x.shape[0],
-            'input_channels': train_x.shape[1],
-            'output_channels': train_y.shape[1],
-            'n_modes': (res // 2,),
-        }
-    
-    print(f"✅ 加载成功: 训练 {train_x.shape[0]}, 测试 {test_x.shape[0]}, 分辨率 {info['resolution']}")
-    return train_x, train_y, test_x, test_y, info
-
-
-def load_h5_two_files(train_h5_path, test_h5_path, n_train=1000, n_test=200, resolution=None, is_2d=True):
-    """
-    从两个独立 H5 文件加载数据 (Zenodo 下载格式)。
-    
-    格式说明:
-    - 训练集在 train 文件，包含输入和输出
-    - 测试集在 test 文件，包含输入和输出
-    
-    Zenodo 数据集格式 (https://zenodo.org/records/13355846):
-    - 每个 H5 文件中 'x' 是输入，'y' 是输出
-    - 格式: [N, ...]
-    
-    Args:
-        train_h5_path: 训练集 H5 文件路径
-        test_h5_path: 测试集 H5 文件路径
-        n_train: 训练样本数 (如果文件更多，截取前 n_train)
-        n_test: 测试样本数 (如果文件更多，截取前 n_test)
-        resolution: 目标分辨率，如果为 None 从文件名推断
-        is_2d: 是否是 2D 数据
-    
-    Returns:
-        train_x, train_y, test_x, test_y, info
-    """
-    if not HAS_H5PY:
-        raise ImportError("需要安装 h5py: pip install h5py")
-    
-    print(f"\n📊 从双文件 H5 加载:")
-    print(f"   训练集: {train_h5_path}")
-    print(f"   测试集: {test_h5_path}")
-    
-    # 自动推断分辨率从文件名
-    if resolution is None:
-        fname = train_h5_path.split('/')[-1]
-        resolution = parse_resolution_from_filename(fname)
-        print(f"   从文件名推断分辨率: {resolution}")
-    
-    # 加载训练集
-    with h5py.File(train_h5_path, 'r') as f:
-        print(f"📂 H5 文件结构: {list(f.keys())}")
-        
-        if 'x' in f:
-            if isinstance(f['x'], h5py.Dataset):
-                train_x_np = f['x'][:]
-                print(f"   找到 'x' dataset: 形状 {train_x_np.shape}")
-            else:
-                ds = find_first_dataset(f['x'])
-                train_x_np = ds[:]
-                print(f"   从 'x' group 提取: 形状 {train_x_np.shape}")
-        elif 'input' in f:
-            if isinstance(f['input'], h5py.Dataset):
-                train_x_np = f['input'][:]
-                print(f"   找到 'input' dataset: 形状 {train_x_np.shape}")
-            else:
-                ds = find_first_dataset(f['input'])
-                train_x_np = ds[:]
-                print(f"   从 'input' group 提取: 形状 {train_x_np.shape}")
-        else:
-            # PDEBench Navier-Stokes 格式检测
-            all_datasets = find_all_datasets(f)
-            print(f"   ⚠️  未找到 'x' 或 'input' 键，查找所有 datasets...")
-            print(f"   找到 {len(all_datasets)} 个 dataset:")
-            for i, ds in enumerate(all_datasets):
-                print(f"      [{i}] {ds.name}: 形状 {ds.shape}, dtype {ds.dtype}")
-            
-            # 检查是否是 'train' group (PDEBench NS 格式)
-            pdebench_u = None
-            if 'train' in f:
-                train_group = f['train']
-                if 'u' in train_group and isinstance(train_group['u'], h5py.Dataset):
-                    u_ds = train_group['u']
-                    if u_ds.ndim == 4 and u_ds.shape[1] > 1:  # [N, T, H, W] with T > 1
-                        pdebench_u = u_ds
-                        print(f"   ✅ 检测到 PDEBench Navier-Stokes 格式: /train/u")
-                        print(f"      形状: {u_ds.shape} (样本, 时间步, H, W)")
-            
-            if pdebench_u is not None:
-                # 提取 PDEBench NS 数据
-                data = pdebench_u[:]  # [N, T, H, W]
-                print(f"   提取 PDEBench Navier-Stokes 数据:")
-                print(f"      输入 x (初始状态): {data.shape[0]} x {data.shape[2]} x {data.shape[3]}")
-                print(f"      输出 y (最终状态): {data.shape[0]} x {data.shape[2]} x {data.shape[3]}")
-                
-                # 输入: 初始速度场 u[:, 0, :, :]
-                train_x_np = data[:, 0, :, :]  # [N, H, W]
-                # 输出: 最终速度场 u[:, -1, :, :]
-                train_y_np = data[:, -1, :, :]  # [N, H, W]
-                
-            elif len(all_datasets) > 0:
-                if all_datasets[0].shape[0] == 0:
-                    raise ValueError(f"在文件 {train_h5_path} 中第一个 dataset 是空的")
-                train_x_np = all_datasets[0][:]
-            else:
-                raise ValueError(f"在文件 {train_h5_path} 中找不到可用的 dataset，所有键: {list(f.keys())}")
-        
-        if 'y' in f:
-            if isinstance(f['y'], h5py.Dataset):
-                train_y_np = f['y'][:]
-                print(f"   找到 'y' dataset: 形状 {train_y_np.shape}")
-            else:
-                ds = find_first_dataset(f['y'])
-                train_y_np = ds[:]
-                print(f"   从 'y' group 提取: 形状 {train_y_np.shape}")
-        elif 'output' in f:
-            if isinstance(f['output'], h5py.Dataset):
-                train_y_np = f['output'][:]
-                print(f"   找到 'output' dataset: 形状 {train_y_np.shape}")
-            else:
-                ds = find_first_dataset(f['output'])
-                train_y_np = ds[:]
-                print(f"   从 'output' group 提取: 形状 {train_y_np.shape}")
-        else:
-            # 尝试找到第二个 dataset
-            all_datasets = find_all_datasets(f)
-            if len(all_datasets) >= 2:
-                if all_datasets[1].shape[0] == 0:
-                    raise ValueError(f"在文件 {train_h5_path} 中第二个 dataset 是空的")
-                train_y_np = all_datasets[1][:]
-                print(f"   使用第二个 dataset 作为 'y': 形状 {train_y_np.shape}")
-            else:
-                # 分割 - 添加检查确保至少有2个样本
-                if train_x_np.shape[0] < 2:
-                    raise ValueError(f"在文件 {train_h5_path} 中只有 {train_x_np.shape[0]} 个样本，无法分割为x和y")
-                n = train_x_np.shape[0] // 2
-                train_y_np = train_x_np[n:]
-                train_x_np = train_x_np[:n]
-                print(f"   ⚠️  分割数据: x[:{n}], y[{n}:]")
-    
-    # 加载测试集
-    with h5py.File(test_h5_path, 'r') as f:
-        if 'x' in f:
-            if isinstance(f['x'], h5py.Dataset):
-                test_x_np = f['x'][:]
-            else:
-                ds = find_first_dataset(f['x'])
-                test_x_np = ds[:]
-        elif 'input' in f:
-            if isinstance(f['input'], h5py.Dataset):
-                test_x_np = f['input'][:]
-            else:
-                ds = find_first_dataset(f['input'])
-                test_x_np = ds[:]
-        else:
-            # PDEBench Navier-Stokes 格式检测（与训练集相同）
-            pdebench_u = None
-            if 'train' in f:
-                train_group = f['train']
-                if 'u' in train_group and isinstance(train_group['u'], h5py.Dataset):
-                    u_ds = train_group['u']
-                    if u_ds.ndim == 4 and u_ds.shape[1] > 1:
-                        pdebench_u = u_ds
-                        print(f"   ✅ 检测到 PDEBench Navier-Stokes 格式: /train/u")
-                        print(f"      形状: {u_ds.shape} (样本, 时间步, H, W)")
-            
-            if pdebench_u is not None:
-                data = pdebench_u[:]
-                test_x_np = data[:, 0, :, :]
-                test_y_np = data[:, -1, :, :]
-                print(f"   提取 PDEBench Navier-Stokes 数据:")
-                print(f"      输入 x: {test_x_np.shape}")
-                print(f"      输出 y: {test_y_np.shape}")
-            else:
-                all_datasets = find_all_datasets(f)
-                if len(all_datasets) > 0:
-                    if all_datasets[0].shape[0] == 0:
-                        raise ValueError(f"在文件 {test_h5_path} 中第一个 dataset 是空的")
-                    test_x_np = all_datasets[0][:]
-                else:
-                    raise ValueError(f"在文件 {test_h5_path} 中找不到可用的 dataset，所有键: {list(f.keys())}")
-        
-        if 'y' in f:
-            if isinstance(f['y'], h5py.Dataset):
-                test_y_np = f['y'][:]
-            else:
-                ds = find_first_dataset(f['y'])
-                test_y_np = ds[:]
-        elif 'output' in f:
-            if isinstance(f['output'], h5py.Dataset):
-                test_y_np = f['output'][:]
-            else:
-                ds = find_first_dataset(f['output'])
-                test_y_np = ds[:]
-        else:
-            # 尝试找到第二个 dataset
-            all_datasets = find_all_datasets(f)
-            if len(all_datasets) >= 2:
-                if all_datasets[1].shape[0] == 0:
-                    raise ValueError(f"在文件 {test_h5_path} 中第二个 dataset 是空的")
-                test_y_np = all_datasets[1][:]
-            else:
-                if test_x_np.shape[0] < 2:
-                    raise ValueError(f"在文件 {test_h5_path} 中只有 {test_x_np.shape[0]} 个样本，无法分割为x和y")
-                n = test_x_np.shape[0] // 2
-                test_y_np = test_x_np[n:]
-                test_x_np = test_x_np[:n]
-    
-    # 转换为 PyTorch 张量
-    train_x = torch.from_numpy(train_x_np).float()
-    train_y = torch.from_numpy(train_y_np).float()
-    test_x = torch.from_numpy(test_x_np).float()
-    test_y = torch.from_numpy(test_y_np).float()
-    
-    # 添加 channel 维度（修复2维数据集问题）
-    if is_2d:
-        # 处理2维数据的各种情况
-        if train_x.ndim == 2:  # [H, W] -> 单样本，需要添加样本维度和通道
-            train_x = train_x.unsqueeze(0).unsqueeze(0)  # [H, W] -> [1, 1, H, W]
-            train_y = train_y.unsqueeze(0).unsqueeze(0)
-        elif train_x.ndim == 3:  # [N, H, W] -> 添加通道
-            train_x = train_x.unsqueeze(1)
-            train_y = train_y.unsqueeze(1)
-        # 4维 [N, C, H, W] 不需要处理
-        
-        if test_x.ndim == 2:
-            test_x = test_x.unsqueeze(0).unsqueeze(0)
-            test_y = test_y.unsqueeze(0).unsqueeze(0)
-        elif test_x.ndim == 3:
-            test_x = test_x.unsqueeze(1)
-            test_y = test_y.unsqueeze(1)
-    else:
-        # 处理1维数据的各种情况
-        if train_x.ndim == 1:  # [L] -> 单样本
-            train_x = train_x.unsqueeze(0).unsqueeze(0)  # [L] -> [1, 1, L]
-            train_y = train_y.unsqueeze(0).unsqueeze(0)
-        elif train_x.ndim == 2:  # [N, L] -> 添加通道
-            train_x = train_x.unsqueeze(1)
-            train_y = train_y.unsqueeze(1)
-        # 3维 [N, C, L] 不需要处理
-        
-        if test_x.ndim == 1:
-            test_x = test_x.unsqueeze(0).unsqueeze(0)
-            test_y = test_y.unsqueeze(0).unsqueeze(0)
-        elif test_x.ndim == 2:
-            test_x = test_x.unsqueeze(1)
-            test_y = test_y.unsqueeze(1)
-    
-    # 截取指定数量 - 添加边界检查
-    if train_x.shape[0] < n_train:
-        print(f"⚠️  警告: 训练集请求 {n_train} 个样本，但文件只有 {train_x.shape[0]} 个，使用全部可用样本")
-        n_train = train_x.shape[0]
-    if test_x.shape[0] < n_test:
-        print(f"⚠️  警告: 测试集请求 {n_test} 个样本，但文件只有 {test_x.shape[0]} 个，使用全部可用样本")
-        n_test = test_x.shape[0]
-    
-    train_x = train_x[:n_train]
-    train_y = train_y[:n_train]
-    test_x = test_x[:n_test]
-    test_y = test_y[:n_test]
-    
-    # 调整分辨率
-    if resolution is not None:
-        train_x = adjust_resolution(train_x, resolution, is_2d=is_2d)
-        train_y = adjust_resolution(train_y, resolution, is_2d=is_2d)
-        test_x = adjust_resolution(test_x, resolution, is_2d=is_2d)
-        test_y = adjust_resolution(test_y, resolution, is_2d=is_2d)
-    
-    # 收集信息
-    if is_2d:
-        res = train_x.shape[-1]
-        info = {
-            'name': f'H5 2D (双文件)',
-            'resolution': f'{res}x{res}',
-            'n_train': train_x.shape[0],
-            'n_test': test_x.shape[0],
-            'input_channels': train_x.shape[1],
-            'output_channels': train_y.shape[1],
-            'n_modes': (res // 2, res // 2),
-        }
-    else:
-        res = train_x.shape[-1]
-        info = {
-            'name': f'H5 1D (双文件)',
-            'resolution': f'{res}',
-            'n_train': train_x.shape[0],
-            'n_test': test_x.shape[0],
-            'input_channels': train_x.shape[1],
-            'output_channels': train_y.shape[1],
-            'n_modes': (res // 2,),
-        }
-    
-    print(f"✅ 加载成功: 训练 {train_x.shape[0]}, 测试 {test_x.shape[0]}, 分辨率 {info['resolution']}")
-    return train_x, train_y, test_x, test_y, info
-
-
-# ============================================================================
-# PT 加载函数
-# ============================================================================
-
-def load_pt_two_files(train_pt_path, test_pt_path, n_train=1000, n_test=200, resolution=None, is_2d=True):
-    """
-    从两个 PT 文件加载 PT 格式数据。
-    
-    Args:
-        train_pt_path: 训练集文件路径
-        test_pt_path: 测试集文件路径
-        n_train: 训练样本数
-        n_test: 测试样本数
-        resolution: 目标分辨率
-        is_2d: 是否是 2D 数据 (从 dataset_name 判断)
-    
-    Returns:
-        train_x, train_y, test_x, test_y, info
-    """
-    print(f"\n📊 从双文件 PT 加载:")
-    print(f"   训练集: {train_pt_path}")
-    print(f"   测试集: {test_pt_path}")
-    
-    # 自动推断分辨率
-    if resolution is None:
-        fname = train_pt_path.split('/')[-1]
-        resolution = parse_resolution_from_filename(fname)
-        print(f"   从文件名推断分辨率: {resolution}")
-    
-    # 加载训练集
-    train_data = torch.load(train_pt_path, weights_only=False)
-    if isinstance(train_data, dict):
-        train_x = train_data.get('x', train_data.get('train_x', train_data.get('input')))
-        train_y = train_data.get('y', train_data.get('train_y', train_data.get('output')))
-    else:
-        # 假设是元组 (x, y)
-        train_x, train_y = train_data[0], train_data[1]
-    
-    # 加载测试集
-    test_data = torch.load(test_pt_path, weights_only=False)
-    if isinstance(test_data, dict):
-        test_x = test_data.get('x', test_data.get('test_x', test_data.get('input')))
-        test_y = test_data.get('y', test_data.get('test_y', test_data.get('output')))
-    else:
-        test_x, test_y = test_data[0], test_data[1]
-    
-    # 转换为 float
-    train_x = train_x.float()
-    train_y = train_y.float()
-    test_x = test_x.float()
-    test_y = test_y.float()
-    
-    # 添加 channel 维度 - 基于 is_2d 判断，和 H5 加载逻辑保持一致
-    if is_2d:
-        # [N, H, W] -> [N, 1, H, W]
-        if train_x.ndim == 3:
-            train_x = train_x.unsqueeze(1)
-            train_y = train_y.unsqueeze(1)
-        if test_x.ndim == 3:
-            test_x = test_x.unsqueeze(1)
-            test_y = test_y.unsqueeze(1)
-    else:
-        # [N, L] -> [N, 1, L]
-        if train_x.ndim == 2:
-            train_x = train_x.unsqueeze(1)
-            train_y = train_y.unsqueeze(1)
-        if test_x.ndim == 2:
-            test_x = test_x.unsqueeze(1)
-            test_y = test_y.unsqueeze(1)
-    
-    # 截取 - 添加边界检查
-    if train_x.shape[0] < n_train:
-        print(f"⚠️  警告: 训练集请求 {n_train} 个样本，但文件只有 {train_x.shape[0]} 个，使用全部可用样本")
-        n_train = train_x.shape[0]
-    if test_x.shape[0] < n_test:
-        print(f"⚠️  警告: 测试集请求 {n_test} 个样本，但文件只有 {test_x.shape[0]} 个，使用全部可用样本")
-        n_test = test_x.shape[0]
-    
-    train_x = train_x[:n_train]
-    train_y = train_y[:n_train]
-    test_x = test_x[:n_test]
-    test_y = test_y[:n_test]
-    
-    # 获取实际分辨率
-    actual_resolution = train_x.shape[-1]
-    if resolution is None:
-        resolution = actual_resolution
-    
-    # 信息
-    if is_2d:
-        info = {
-            'name': f'PT 2D (双文件)',
-            'resolution': f'{resolution}x{resolution}',
-            'n_train': train_x.shape[0],
-            'n_test': test_x.shape[0],
-            'input_channels': train_x.shape[1],
-            'output_channels': train_y.shape[1],
-            'n_modes': (resolution // 2, resolution // 2),
-        }
-    else:
-        info = {
-            'name': 'PT 1D (双文件)',
-            'resolution': f'{resolution}',
-            'n_train': train_x.shape[0],
-            'n_test': test_x.shape[0],
-            'input_channels': train_x.shape[1],
-            'output_channels': train_y.shape[1],
-            'n_modes': (resolution // 2,),
-        }
-    
-    print(f"✅ 加载成功: 训练 {train_x.shape[0]}, 测试 {test_x.shape[0]}, 分辨率 {info['resolution']}")
-    return train_x, train_y, test_x, test_y, info
-
-
-def load_pt_single_file(pt_path, n_train=1000, n_test=200, resolution=None, is_2d=True):
-    """
-    从单个 PT 文件加载数据。
-    
-    Args:
-        pt_path: PT 文件路径
-        n_train: 训练样本数
-        n_test: 测试样本数
-        resolution: 目标分辨率
-        is_2d: 是否是 2D 数据 (从 dataset_name 判断)
-    
-    Returns:
-        train_x, train_y, test_x, test_y, info
-    """
-    print(f"\n📊 从单文件 PT 加载: {pt_path}")
-    
-    data = torch.load(pt_path, weights_only=False)
-    if isinstance(data, dict):
-        x = data.get('x')
-        y = data.get('y')
-    else:
-        x, y = data[0], data[1]
-    
-    x = x.float()
-    y = y.float()
-    
-    # 添加 channel 维度 - 基于 is_2d 判断，和 H5 加载逻辑保持一致
-    if is_2d:
-        # [N, H, W] -> [N, 1, H, W]
-        if x.ndim == 3:
-            x = x.unsqueeze(1)
-            y = y.unsqueeze(1)
-    else:
-        # [N, L] -> [N, 1, L]
-        if x.ndim == 2:
-            x = x.unsqueeze(1)
-            y = y.unsqueeze(1)
-    
-    # 分割 - 添加边界检查
-    if x.shape[0] < n_train + n_test:
-        available = x.shape[0]
-        print(f"⚠️  警告: 请求总共 {n_train + n_test} 个样本，但文件只有 {available} 个，调整分割比例")
-        if available <= n_train:
-            n_train = available
-            n_test = 0
-        else:
-            n_test = available - n_train
-    
-    train_x = x[:n_train]
-    train_y = y[:n_train]
-    test_x = x[n_train:n_train+n_test]
-    test_y = y[n_train:n_train+n_test]
-    
-    # 推断分辨率
-    if resolution is None:
-        resolution = parse_resolution_from_filename(pt_path.split('/')[-1])
-    
-    is_2d = train_x.ndim == 4
-    if is_2d:
-        actual_res = train_x.shape[-1]
-    else:
-        actual_res = train_x.shape[-1]
-    
-    if resolution != actual_res:
-        resolution = actual_res
-    
-    # 信息
-    if is_2d:
-        info = {
-            'name': 'PT 2D (单文件)',
-            'resolution': f'{resolution}x{resolution}',
-            'n_train': train_x.shape[0],
-            'n_test': test_x.shape[0],
-            'input_channels': train_x.shape[1],
-            'output_channels': train_y.shape[1],
-            'n_modes': (resolution // 2, resolution // 2),
-        }
-    else:
-        info = {
-            'name': 'PT 1D (单文件)',
-            'resolution': f'{resolution}',
-            'n_train': train_x.shape[0],
-            'n_test': test_x.shape[0],
-            'input_channels': train_x.shape[1],
-            'output_channels': train_y.shape[1],
-            'n_modes': (resolution // 2,),
-        }
-    
-    print(f"✅ 加载成功: 训练 {train_x.shape[0]}, 测试 {test_x.shape[0]}, 分辨率 {info['resolution']}")
-    return train_x, train_y, test_x, test_y, info
-
-
-# ============================================================================
-# 主入口函数
-# ============================================================================
 
 def load_dataset(
     dataset_name: str,
-    data_format: str = 'pt',
-    train_path: str = None,
-    test_path: str = None,
-    data_path: str = None,
     n_train: int = 1000,
     n_test: int = 200,
-    resolution: int = None,
-):
+    resolution: int = 64,
+    **kwargs
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, Dict]:
     """
-    通用数据集加载入口函数。
+    使用 NeuralOperator 2.0.0 数据集加载数据
     
-    支持所有格式:
-    - PT 单文件
-    - PT 双文件 (train + test)
-    - H5 单文件
-    - H5 双文件 (train + test) ← 这就是你从 Zenodo 下载的格式
-    
-    参数说明:
-    - 如果只有 data_path，就是单文件模式
-    - 如果同时提供 train_path 和 test_path，就是双文件模式
+    支持的数据集:
+    - 'navier_stokes': Navier-Stokes 方程
+    - 'darcy': Darcy Flow 方程
     
     Args:
-        dataset_name: 'darcy', 'burgers', 'navier_stokes'
-        data_format: 'pt' 或 'h5'
-        train_path: 训练集文件路径 (双文件模式必需)
-        test_path: 测试集文件路径 (双文件模式必需)
-        data_path: 数据文件路径 (单文件模式必需)
+        dataset_name: 数据集名称 ('navier_stokes' 或 'darcy')
         n_train: 训练样本数
         n_test: 测试样本数
-        resolution: 目标分辨率，如果为 None 从文件名推断
-    
+        resolution: 数据分辨率
+        **kwargs: 其他参数传递给数据集类
+        
     Returns:
         (train_x, train_y, test_x, test_y, info)
+        
+    Raises:
+        ImportError: 如果未安装 neuraloperator
+        ValueError: 如果不支持的数据集名称
     
-    使用示例 (Zenodo 双文件 H5):
-        train_x, train_y, test_x, test_y, info = load_dataset(
-            dataset_name='navier_stokes',
-            data_format='h5',
-            train_path='./data/2D_NS_Re100_Train.h5',
-            test_path='./data/2D_NS_Re100_Test.h5',
-            n_train=1000,
-            n_test=200,
-        )
-    
-    使用示例 (本地生成 PT):
-        train_x, train_y, test_x, test_y, info = load_dataset(
-            dataset_name='darcy',
-            data_format='pt',
-            data_path='./data/darcy_train_16.pt',
-            n_train=1000,
-            n_test=200,
-        )
+    使用示例:
+        >>> train_x, train_y, test_x, test_y, info = load_dataset(
+        >>>     dataset_name='navier_stokes',
+        >>>     n_train=1000,
+        >>>     n_test=200,
+        >>>     resolution=64,
+        >>> )
     """
-    # 判断是 2D 还是 1D
-    # 优先根据 dataset_name 判断，然后根据实际数据维度验证
-    if dataset_name in ['darcy', 'navier_stokes']:
-        is_2d = True
-    elif dataset_name == 'burgers':
-        # ✅ 修复：真正检测 Burgers 数据维度
-        # 从文件名或文件内容判断是 1D 还是 2D
-        is_2d = False  # 默认默认值，下面会重新检测
-        
-        # 如果提供了 train_path，检查文件名
-        if train_path is not None:
-            if '2d' in train_path.lower() or '2D' in train_path:
-                is_2d = True
-                print(f"📂 从文件名检测到 2D Burgers 数据集: {train_path}")
-            elif '1d' in train_path.lower() or '1D' in train_path:
-                is_2d = False
-                print(f"📂 从文件名检测到 1D Burgers 数据集: {train_path}")
-        # 如果没有 train_path，尝试从数据文件检测（在后面处理）
+    if not HAS_NEURALOP:
+        raise ImportError("需要安装 neuraloperator: pip install neuraloperator")
+    
+    print(f"\n📊 使用 NeuralOperator 2.0.0 加载数据集: {dataset_name}")
+    print(f"   配置: n_train={n_train}, n_test={n_test}, resolution={resolution}")
+    
+    if dataset_name == 'navier_stokes':
+        return _load_navier_stokes(n_train, n_test, resolution, **kwargs)
+    elif dataset_name == 'darcy':
+        return _load_darcy(n_train, n_test, resolution, **kwargs)
     else:
-        is_2d = False
-    
-    # 双文件模式优先级高
-    if train_path is not None and test_path is not None:
-        if data_format == 'h5':
-            return load_h5_two_files(
-            train_h5_path=train_path,
-            test_h5_path=test_path,
-            n_train=n_train,
-            n_test=n_test,
-            resolution=resolution,
-            is_2d=is_2d,
-        )
-        elif data_format == 'pt':
-            return load_pt_two_files(
-                train_pt_path=train_path,
-                test_pt_path=test_path,
-                n_train=n_train,
-                n_test=n_test,
-                resolution=resolution,
-                is_2d=is_2d,
-            )
-        else:
-            raise ValueError(f"不支持的数据格式: {data_format}")
-    
-    # 单文件模式
-    elif data_path is not None:
-        if data_format == 'h5':
-            return load_h5_single_file(
-                h5_path=data_path,
-                n_train=n_train,
-                n_test=n_test,
-                resolution=resolution,
-                is_2d=is_2d,
-            )
-        elif data_format == 'pt':
-            return load_pt_single_file(
-                pt_path=data_path,
-                n_train=n_train,
-                n_test=n_test,
-                resolution=resolution,
-                is_2d=is_2d,
-            )
-        else:
-            raise ValueError(f"不支持的数据格式: {data_format}")
-    
-    else:
-        raise ValueError("必须提供 data_path 或者 train_path + test_path")
+        raise ValueError(f"不支持的数据集: {dataset_name}. 支持: 'navier_stokes', 'darcy'")
 
 
-if __name__ == '__main__':
-    import argparse
-    parser = argparse.ArgumentParser(description='MHF-FNO 通用数据加载测试')
+def _load_navier_stokes(
+    n_train: int,
+    n_test: int,
+    resolution: int,
+    root_dir: Optional[str] = None,
+    download: bool = False,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, Dict]:
+    """加载 Navier-Stokes 数据集"""
     
-    parser.add_argument('--dataset', type=str, required=True,
-                       choices=['darcy', 'burgers', 'navier_stokes'],
-                       help='数据集名称')
-    parser.add_argument('--format', type=str, default='h5',
-                       choices=['pt', 'h5'], help='数据格式')
-    parser.add_argument('--train_path', type=str, default=None, help='训练集路径 (双文件)')
-    parser.add_argument('--test_path', type=str, default=None, help='测试集路径 (双文件)')
-    parser.add_argument('--data_path', type=str, default=None, help='数据路径 (单文件)')
-    parser.add_argument('--n_train', type=int, default=1000, help='训练样本数')
-    parser.add_argument('--n_test', type=int, default=200, help='测试样本数')
-    parser.add_argument('--resolution', type=int, default=None, help='目标分辨率')
+    if root_dir is None:
+        root_dir = Path('./data').absolute()
+    else:
+        root_dir = Path(root_dir)
     
-    args = parser.parse_args()
+    print(f"   root_dir: {root_dir}")
+    print(f"   download: {download}")
     
-    print("=" * 60)
-    print("MHF-FNO 通用数据加载测试")
-    print("=" * 60)
+    # 创建数据集对象
+    dataset = NavierStokesDataset(
+        root_dir=root_dir,
+        n_train=n_train,
+        n_tests=[n_test],
+        batch_size=n_train,  # 一次性加载所有数据
+        test_batch_sizes=[n_test],
+        train_resolution=resolution,
+        test_resolutions=[resolution],
+        encode_input=False,
+        encode_output=False,
+        download=download,
+    )
     
-    try:
-        train_x, train_y, test_x, test_y, info = load_dataset(
-            dataset_name=args.dataset,
-            data_format=args.format,
-            train_path=args.train_path,
-            test_path=args.test_path,
-            data_path=args.data_path,
-            n_train=args.n_train,
-            n_test=args.n_test,
-            resolution=args.resolution,
-        )
+    print(f"   ✅ NeuralOperator 数据集创建成功")
+    print(f"      训练集大小: {len(dataset.train_db)}")
+    print(f"      测试集大小: {len(dataset.test_dbs[resolution])}")
+    
+    # 加载数据
+    train_data = dataset.train_db[:]
+    test_data = dataset.test_dbs[resolution][:]
+    
+    # 提取 x 和 y
+    if isinstance(train_data, (tuple, list)):
+        train_x, train_y = train_data
+    else:
+        train_x = train_data
+        train_y = train_data  # NS 数据集通常 x=y
         
-        print("\n加载结果:")
-        print(f"  名称: {info['name']}")
-        print(f"  分辨率: {info['resolution']}")
-        print(f"  训练集: {train_x.shape}")
-        print(f"  测试集: {test_x.shape}")
-        print(f"  输入通道: {info['input_channels']}")
-        print(f"  输出通道: {info['output_channels']}")
-        print(f"\n✅ 测试通过！")
-        
-    except Exception as e:
-            print(f"\n❌ 加载失败: {e}")
-            import traceback
-            traceback.print_exc()
+    if isinstance(test_data, (tuple, list)):
+        test_x, test_y = test_data
+    else:
+        test_x = test_data
+        test_y = test_data
+    
+    # 转换为 torch.Tensor
+    train_x = torch.as_tensor(train_x, dtype=torch.float32)
+    train_y = torch.as_tensor(train_y, dtype=torch.float32)
+    test_x = torch.as_tensor(test_x, dtype=torch.float32)
+    test_y = torch.as_tensor(test_y, dtype=torch.float32)
+    
+    # 确保维度正确 [N, C, H, W]
+    if train_x.ndim == 3:  # [N, H, W] -> [N, 1, H, W]
+        train_x = train_x.unsqueeze(1)
+        train_y = train_y.unsqueeze(1)
+    if test_x.ndim == 3:
+        test_x = test_x.unsqueeze(1)
+        test_y = test_y.unsqueeze(1)
+    
+    print(f"   ✅ 数据加载成功")
+    print(f"      train_x: {train_x.shape}")
+    print(f"      train_y: {train_y.shape}")
+    print(f"      test_x: {test_x.shape}")
+    print(f"      test_y: {test_y.shape}")
+    
+    info = {
+        'name': f'NeuralOperator Navier-Stokes',
+        'resolution': f'{resolution}x{resolution}',
+        'n_train': train_x.shape[0],
+        'n_test': test_x.shape[0],
+        'input_channels': train_x.shape[1],
+        'output_channels': train_y.shape[1],
+        'n_modes': (resolution // 2, resolution // 2),
+    }
+    
+    return train_x, train_y, test_x, test_y, info
+
+
+def _load_darcy(
+    n_train: int,
+    n_test: int,
+    resolution: int,
+    root_dir: Optional[str] = None,
+    download: bool = False,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, Dict]:
+    """加载 Darcy 数据集"""
+    
+    if root_dir is None:
+        root_dir = Path('./data').absolute()
+    else:
+        root_dir = Path(root_dir)
+    
+    print(f"   root_dir: {root_dir}")
+    print(f"   download: {download}")
+    
+    # 创建数据集对象
+    dataset = DarcyDataset(
+        root_dir=root_dir,
+        n_train=n_train,
+        n_tests=[n_test],
+        batch_size=n_train,
+        test_batch_sizes=[n_test],
+        train_resolution=resolution,
+        test_resolutions=[resolution],
+        encode_input=False,
+        encode_output=False,
+        download=download,
+    )
+    
+    print(f"   ✅ NeuralOperator 数据集创建成功")
+    print(f"      训练集大小: {len(dataset.train_db)}")
+    print(f"      测试集大小: {len(dataset.test_dbs[resolution])}")
+    
+    # 加载数据
+    train_data = dataset.train_db[:]
+    test_data = dataset.test_dbs[resolution][:]
+    
+    # 提取 x 和 y
+    if (isinstance(train_data, (tuple, list))):
+        train_x, train_y = (train_data)
+    else:
+        train_x = train_data
+        train_y = train_data
+    
+    if (isinstance(test_data, (tuple, list))):
+        test_x, test_y = (test_data)
+    else:
+        test_x = test_data
+        test_y = test_data
+    
+    # 转换为 torch.Tensor
+    train_x = torch.as_tensor(train_x, dtype=torch.float32)
+    train_y = torch.as_tensor(train_y, dtype=torch.float32)
+    test_x = torch.as_tensor(test_x, dtype=torch.float32)
+    test_y = torch.as_tensor(test_y, dtype=torch.float32)
+    
+    # 确保维度正确 [N, C, H, W]
+    if train_x.ndim == 3:
+        train_x = train_x.unsqueeze(1)
+        train_y = train_y.unsqueeze(1)
+    if test_x.ndim == 3:
+        test_x = test_x.unsqueeze(1)
+        test_y = test_y.unsqueeze(1)
+    
+    print(f"   ✅ 数据加载成功")
+    print(f"      train_x: {train_x.shape}")
+    print(f"      train_y: {train_y.shape}")
+    print(f"      test_x: {test_x.shape}")
+    print(f"      test_y: {test_y.shape}")
+    
+    info = {
+        'name': f'NeuralOperator Darcy Flow',
+        'resolution': f'{resolution}x{resolution}',
+        'n_train': train_x.shape[0],
+        'n_test': test_x.shape[0],
+        'input_channels': train_x.shape[1],
+        'output_channels': train_y.shape[1],
+        'n_modes': (resolution // 2, resolution // 2),
+    }
+    
+    return train_x, train_y, test_x, test_y, info

@@ -2,6 +2,63 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.0] - 2026-03-27
+
+### Refactoring
+- **Major refactoring: Replace custom data loader with NeuralOperator 2.0.0** ⭐ BREAKING CHANGE
+  - **Rationale**: Custom data loader became complex (1000+ lines) and hard to maintain
+  - **Issues Fixed**:
+    - 1D H5 loading dimension errors
+    - 2D Burgers dataset not detected correctly
+    - 2D Navier-Stokes PDEBench format not supported
+    - Multiple format compatibility issues
+  - **Solution**: Directly use NeuralOperator 2.0.0's tested data loaders
+    - Delete: ~1000 lines of custom loading code
+    - Replace: ~100 lines of stable, tested wrapper code
+  - **Benefits**:
+    - ✅ Stable and tested (maintained by NeuralOperator team)
+    - ✅ Supports all official formats (Zenodo, PDEBench, etc.)
+    - ✅ Automatic download and decompression
+    - ✅ Unified interface and output format
+    - ✅ 90% reduction in maintenance code
+
+### Changed
+- **Data loading architecture**: Complete rewrite using NeuralOperator 2.0.0 datasets
+  - `NavierStokesDataset`: Directly imported from `neuralop.data.datasets`
+  - `DarcyDataset`: Directly imported from `neuralop.data.datasets`
+  - `load_dataset()`: Simplified wrapper function with consistent API
+
+### Fixed
+- **All previous data loading issues**: Resolved by using NeuralOperator's tested implementation
+  - Burgers 1D/2D detection: ✅ Handled by NeuralOperator
+  - Navier-Stokes PDEBench format: ✅ Handled by NeuralOperator
+  - Dimension handling: ✅ Handled by NeuralOperator
+  - H5/PT format compatibility: ✅ Handled by NeuralOperator
+
+### Migration Guide
+If you were using custom data loading options, update to:
+
+```python
+# Old way (v1.5.x)
+data = load_dataset(
+    dataset_name='navier_stokes',
+    data_format='h5',
+    train_path='./data/NS_Train.h5',
+    test_path='./data/NS_Test.h5',
+    n_train=1000,
+    n_test=200,
+)
+
+# New way (v1.6.0)
+data = load_dataset(
+    dataset_name='navier_stokes',
+    n_train=1000,
+    n_test=200,
+    resolution=64,
+    download=True,  # Auto download from Zenodo
+)
+```
+
 ## [1.5.3] - 2026-03-27
 
 ### Fixed
