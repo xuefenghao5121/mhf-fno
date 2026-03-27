@@ -189,6 +189,57 @@ def count_parameters(model):
 # 主测试函数
 # ============================================================================
 
+def get_dataset_config(dataset_name):
+    """
+    根据数据集返回最佳MHF-FNO配置
+    
+    Args:
+        dataset_name: 'darcy', 'burgers', 'navier_stokes'
+    
+    Returns:
+        dict: MHF-FNO 配置参数
+    """
+    # 默认配置
+    config = {
+        'use_pino': False,
+        'use_coda': False,
+        'mhf_layers': [],
+        'n_heads': 4,
+        'pino_weight': 0.1,
+    }
+    
+    if dataset_name == 'navier_stokes':
+        # NS数据集：启用PINO + CoDA + MHF（最佳性能组合）
+        # PINO对NS方程至关重要（∂u/∂t + (u·∇)u = -∇p + ν∇²u）
+        config.update({
+            'use_pino': True,      # 启用物理约束
+            'use_coda': True,       # 启用Cross-Head Attention
+            'mhf_layers': [0, 2],   # 在第1和第3层使用MHF
+            'pino_weight': 0.1,
+            'n_heads': 4,
+        })
+    elif dataset_name == 'darcy':
+        # Darcy数据集：MHF + CoDA
+        # 椭圆PDE不需要时间演化，PINO收益较小
+        config.update({
+            'use_pino': False,
+            'use_coda': True,
+            'mhf_layers': [0, 2],
+            'n_heads': 4,
+        })
+    elif dataset_name == 'burgers':
+        # Burgers数据集：MHF
+        # 简单对流扩散，CoDA和PINO收益有限
+        config.update({
+            'use_pino': False,
+            'use_coda': False,
+            'mhf_layers': [0],
+            'n_heads': 2,
+        })
+    
+    return config
+
+
 def run_benchmark(dataset_name, config):
     """运行单个数据集的基准测试"""
     
@@ -269,6 +320,14 @@ def run_benchmark(dataset_name, config):
     print(f"测试 MHF-FNO")
     print(f"{'='*60}")
     
+    # 🔥 关键修复：根据数据集自动配置模型
+    mhf_config = get_dataset_config(dataset_name)
+    print(f"自动配置:")
+    print(f"  use_pino: {mhf_config['use_pino']}")
+    print(f"  use_coda: {mhf_config['use_coda']}")
+    print(f"  mhf_layers: {mhf_config['mhf_layers']}")
+    print(f"  n_heads: {mhf_config['n_heads']}")
+    
     torch.manual_seed(config['seed'])
     if isinstance(n_modes, tuple) and len(n_modes) == 2:
         # 2D
@@ -278,7 +337,10 @@ def run_benchmark(dataset_name, config):
             in_channels=info['input_channels'],
             out_channels=info['output_channels'],
             n_layers=3,
-            n_heads=4,
+            n_heads=mhf_config['n_heads'],
+            mhf_layers=mhf_config['mhf_layers'],
+            use_coda=mhf_config['use_coda'],
+            use_pino=mhf_config['use_pino'],
         )
     else:
         # 1D
@@ -288,7 +350,10 @@ def run_benchmark(dataset_name, config):
             in_channels=info['input_channels'],
             out_channels=info['output_channels'],
             n_layers=3,
-            n_heads=2,
+            n_heads=mhf_config['n_heads'],
+            mhf_layers=mhf_config['mhf_layers'],
+            use_coda=mhf_config['use_coda'],
+            use_pino=mhf_config['use_pino'],
         )
     
     params_mhf = count_parameters(model_mhf)
