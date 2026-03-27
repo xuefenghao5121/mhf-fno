@@ -490,21 +490,32 @@ def load_h5_two_files(train_h5_path, test_h5_path, n_train=1000, n_test=200, res
     
     # 加载训练集
     with h5py.File(train_h5_path, 'r') as f:
+        print(f"📂 H5 文件结构: {list(f.keys())}")
+        
         if 'x' in f:
             if isinstance(f['x'], h5py.Dataset):
                 train_x_np = f['x'][:]
+                print(f"   找到 'x' dataset: 形状 {train_x_np.shape}")
             else:
                 ds = find_first_dataset(f['x'])
                 train_x_np = ds[:]
+                print(f"   从 'x' group 提取: 形状 {train_x_np.shape}")
         elif 'input' in f:
             if isinstance(f['input'], h5py.Dataset):
                 train_x_np = f['input'][:]
+                print(f"   找到 'input' dataset: 形状 {train_x_np.shape}")
             else:
                 ds = find_first_dataset(f['input'])
                 train_x_np = ds[:]
+                print(f"   从 'input' group 提取: 形状 {train_x_np.shape}")
         else:
             # 找到第一个 dataset (跳过 groups)
             all_datasets = find_all_datasets(f)
+            print(f"   ⚠️  未找到 'x' 或 'input' 键，查找所有 datasets...")
+            print(f"   找到 {len(all_datasets)} 个 dataset:")
+            for i, ds in enumerate(all_datasets):
+                print(f"      [{i}] {ds.name}: 形状 {ds.shape}, dtype {ds.dtype}")
+            
             if len(all_datasets) > 0:
                 if all_datasets[0].shape[0] == 0:
                     raise ValueError(f"在文件 {train_h5_path} 中第一个 dataset 是空的")
@@ -515,15 +526,19 @@ def load_h5_two_files(train_h5_path, test_h5_path, n_train=1000, n_test=200, res
         if 'y' in f:
             if isinstance(f['y'], h5py.Dataset):
                 train_y_np = f['y'][:]
+                print(f"   找到 'y' dataset: 形状 {train_y_np.shape}")
             else:
                 ds = find_first_dataset(f['y'])
                 train_y_np = ds[:]
+                print(f"   从 'y' group 提取: 形状 {train_y_np.shape}")
         elif 'output' in f:
             if isinstance(f['output'], h5py.Dataset):
                 train_y_np = f['output'][:]
+                print(f"   找到 'output' dataset: 形状 {train_y_np.shape}")
             else:
                 ds = find_first_dataset(f['output'])
                 train_y_np = ds[:]
+                print(f"   从 'output' group 提取: 形状 {train_y_np.shape}")
         else:
             # 尝试找到第二个 dataset
             all_datasets = find_all_datasets(f)
@@ -531,6 +546,7 @@ def load_h5_two_files(train_h5_path, test_h5_path, n_train=1000, n_test=200, res
                 if all_datasets[1].shape[0] == 0:
                     raise ValueError(f"在文件 {train_h5_path} 中第二个 dataset 是空的")
                 train_y_np = all_datasets[1][:]
+                print(f"   使用第二个 dataset 作为 'y': 形状 {train_y_np.shape}")
             else:
                 # 分割 - 添加检查确保至少有2个样本
                 if train_x_np.shape[0] < 2:
@@ -538,6 +554,7 @@ def load_h5_two_files(train_h5_path, test_h5_path, n_train=1000, n_test=200, res
                 n = train_x_np.shape[0] // 2
                 train_y_np = train_x_np[n:]
                 train_x_np = train_x_np[:n]
+                print(f"   ⚠️  分割数据: x[:{n}], y[{n}:]")
     
     # 加载测试集
     with h5py.File(test_h5_path, 'r') as f:
