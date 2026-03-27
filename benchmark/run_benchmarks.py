@@ -68,23 +68,42 @@ class MHFFNO(nn.Module):
     """
     MHF-FNO 模型 (包装器)
     
-    使用核心库的 create_hybrid_fno 创建模型，确保行为一致性。
+    使用核心库的 create_hybrid_fno 或 create_mhf_fno_with_attention 创建模型。
+    支持 use_coda 和 use_pino 参数。
     """
     
     def __init__(self, n_modes, hidden_channels, in_channels, out_channels, 
-                 n_layers=3, n_heads=4, mhf_layers=None):
+                 n_layers=3, n_heads=4, mhf_layers=None, use_coda=False, use_pino=False):
         super().__init__()
         
-        # 使用核心库创建模型
-        self.model = create_hybrid_fno(
-            n_modes=n_modes,
-            hidden_channels=hidden_channels,
-            in_channels=in_channels,
-            out_channels=out_channels,
-            n_layers=n_layers,
-            n_heads=n_heads,
-            mhf_layers=mhf_layers
-        )
+        self.use_coda = use_coda
+        self.use_pino = use_pino
+        
+        # 根据 use_coda 选择合适的模型创建函数
+        if use_coda:
+            # 使用带 CoDA 的模型
+            from mhf_fno import create_mhf_fno_with_attention
+            self.model = create_mhf_fno_with_attention(
+                n_modes=n_modes,
+                hidden_channels=hidden_channels,
+                in_channels=in_channels,
+                out_channels=out_channels,
+                n_layers=n_layers,
+                n_heads=n_heads,
+                mhf_layers=mhf_layers,
+                use_pino=use_pino
+            )
+        else:
+            # 使用基础 MHF-FNO 模型
+            self.model = create_hybrid_fno(
+                n_modes=n_modes,
+                hidden_channels=hidden_channels,
+                in_channels=in_channels,
+                out_channels=out_channels,
+                n_layers=n_layers,
+                n_heads=n_heads,
+                mhf_layers=mhf_layers
+            )
     
     def forward(self, x):
         return self.model(x)
