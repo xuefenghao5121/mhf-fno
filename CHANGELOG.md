@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.1] - 2026-03-27
+
+### Fixed
+- **Burgers dataset dimension detection fix**: Added auto_detect_2d configuration to handle both 1D and 2D Burgers datasets
+  - **Problem**: Burgers equation has both 1D and 2D versions, but code forced all Burgers datasets to be treated as 1D
+  - **Impact**: 2D Burgers datasets caused dimension mismatches and failed to load
+  - **Solution**: Added 'auto_detect_2d' flag in get_dataset_config() function
+    - For navier_stokes and darcy: auto_detect_2d = False (fixed as 2D)
+    - For burgers: auto_detect_2d = True (detect actual dimension based on tensor shape)
+  - **Benefit**: Both 1D and 2D Burgers datasets are now supported correctly (backward compatible)
+  
+  - **Bugfixes verified**:
+    ✅ 2D Burgers datasets now load correctly
+    ✅ 1D Burgers datasets work as before
+    ✅ Navier-Stokes and Darcy unchanged
+    ✅ All 2D datasets pass dimension validation
+
+### Changed
+- **Version update**: Bumped to 1.5.1 for critical 2D dataset support fix
+- **Dimension handling**: More robust automatic dimension detection for all dataset types
+
 ## [1.5.0] - 2026-03-27
 
 ### Fixed
