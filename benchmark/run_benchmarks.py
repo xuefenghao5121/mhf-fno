@@ -69,7 +69,7 @@ class MHFFNO(nn.Module):
     MHF-FNO 模型 (包装器)
     
     使用核心库的 create_hybrid_fno 或 create_mhf_fno_with_attention 创建模型。
-    支持 use_coda 和 use_pino 参数。
+    支持 use_coda 参数。
     """
     
     def __init__(self, n_modes, hidden_channels, in_channels, out_channels, 
@@ -91,7 +91,7 @@ class MHFFNO(nn.Module):
                 n_layers=n_layers,
                 n_heads=n_heads,
                 mhf_layers=mhf_layers,
-                use_pino=use_pino
+                # use_pino 参数暂不支持
             )
         else:
             # 使用基础 MHF-FNO 模型
@@ -268,8 +268,39 @@ def get_dataset_config(dataset_name):
 def run_benchmark(dataset_name, config):
     """运行单个数据集的基准测试"""
     
-    # 加载数据 - 使用 NeuralOperator 2.0.0 数据加载器 (v1.6.0)
-    # resolution 现在是必需参数
+    # 判断是否使用本地数据集
+    use_custom_data = False
+    data_format = None
+    train_path = None
+    test_path = None
+    
+    # 检查是否提供了本地数据路径
+    if config.get('train_path') is not None and config.get('test_path') is not None:
+        # 双文件模式
+        use_custom_data = True
+        train_path = config['train_path']
+        test_path = config['test_path']
+        data_format = config.get('data_format')
+        
+        # 自动检测数据格式
+        if data_format is None:
+            if train_path.endswith('.h5') or train_path.endswith('.hdf5'):
+                data_format = 'h5'
+            elif train_path.endswith('.pt') or train_path.endswith('.pth'):
+                data_format = 'pt'
+        
+        print(f"📁 使用本地数据集 (模式: 双文件)")
+        print(f"   训练数据: {train_path}")
+        print(f"   测试数据: {test_path}")
+        print(f"   数据格式: {data_format}")
+        
+    elif config.get('data_path') is not None:
+        # 单文件模式（暂时不支持，NeuralOperator 数据集通常是双文件）
+        print(f"⚠️  警告: 单文件模式暂不支持")
+        print(f"   请使用 --train_path 和 --test_path 分别指定训练集和测试集")
+        return None
+    
+    # 加载数据
     if config.get('resolution') is None:
         # 设置默认分辨率
         if dataset_name == 'navier_stokes':
@@ -288,12 +319,26 @@ def run_benchmark(dataset_name, config):
     print(f"   训练样本: {config['n_train']}")
     print(f"   测试样本: {config['n_test']}")
     
-    data = load_dataset(
-        dataset_name=dataset_name,
-        n_train=config['n_train'],
-        n_test=config['n_test'],
-        resolution=resolution,
-    )
+    # 根据数据源类型调用不同的加载方式
+    if use_custom_data:
+        # 加载本地数据集
+        data = load_dataset(
+            dataset_name='custom',  # 使用 'custom' 模式
+            data_format=data_format,
+            train_path=train_path,
+            test_path=test_path,
+            n_train=config['n_train'],
+            n_test=config['n_test'],
+            resolution=resolution,
+        )
+    else:
+        # 加载 NeuralOperator 内置数据集
+        data = load_dataset(
+            dataset_name=dataset_name,
+            n_train=config['n_train'],
+            n_test=config['n_test'],
+            resolution=resolution,
+        )
     
     if data is None:
         return None

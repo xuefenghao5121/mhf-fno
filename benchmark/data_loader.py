@@ -415,6 +415,12 @@ def _load_pt_custom(
     print(f"      test_x: {test_x.shape}")
     print(f"      test_y: {test_y.shape}")
 
+    # 计算 n_modes (通常是分辨率的一半)
+    if is_2d:
+        n_modes = (train_x.shape[-2] // 2, train_x.shape[-1] // 2)
+    else:
+        n_modes = (train_x.shape[-1] // 2,)  # 1D 数据集也需要 tuple
+
     info = {
         'name': f'客户数据集 (PT)',
         'resolution': f'{train_x.shape[-2]}x{train_x.shape[-1]}' if is_2d else f'{train_x.shape[-1]}',
@@ -422,6 +428,8 @@ def _load_pt_custom(
         'n_test': test_x.shape[0],
         'input_channels': train_x.shape[1],
         'output_channels': train_y.shape[1],
+        'n_modes': n_modes,  # 添加 n_modes
+        'is_2d': is_2d,
     }
 
     return train_x, train_y, test_x, test_y, info
