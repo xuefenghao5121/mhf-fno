@@ -361,18 +361,19 @@ def generate_darcy_flow(
     resolution: int = 16,
     output_dir: str = './data',
     device: str = 'cpu',
-    verbose: bool = True
+    verbose: bool = True,
+    mode: str = 'gaussian'
 ) -> Dict:
     """
     生成 Darcy Flow 数据集
-    
+
     输入: 渗透系数场 a(x)
     输出: 压力场 u(x)
-    
+
     参数来源:
     - FNO 论文 (Li et al., 2020): resolution=16, n_train=1000, n_test=100
     - PDEBench (Takamoto et al., 2022): resolution=421, n_train=5000, n_test=500
-    
+
     参数:
         n_train: 训练样本数
         n_test: 测试样本数
@@ -380,42 +381,67 @@ def generate_darcy_flow(
         output_dir: 输出目录
         device: 计算设备
         verbose: 打印进度
-    
+        mode: 生成模式 ('gaussian' 或 'binary')
+            - 'gaussian': 使用高斯随机场（原始模式）
+            - 'binary': 使用二值分布，匹配真实 PDEBench 数据集
+
     返回:
         元数据字典
     """
     print(f"\n{'='*60}")
-    print(f"生成 Darcy Flow 数据集")
+    print(f"生成 Darcy Flow 数据集 (模式: {mode})")
     print(f"分辨率: {resolution}x{resolution}")
     print(f"训练集: {n_train}, 测试集: {n_test}")
     print(f"{'='*60}")
-    
+
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
-    
+
     n_total = n_train + n_test
-    
+
     # 生成数据
     inputs = []
     outputs = []
-    
+
     t0 = time.time()
-    
+
     for i in range(n_total):
-        # 生成随机场作为渗透系数
-        permeability = gaussian_random_field_2d(
-            resolution, alpha=2.5, tau=3.0, sigma=1.0, device=device
-        )
-        
-        # 取正值并归一化到 [0.1, 10]
-        permeability = torch.exp(permeability)
-        
-        # 求解 Darcy Flow
-        solution = solve_darcy_flow_fast(permeability, n_iter=500, device=device)
-        
+        if mode == 'binary':
+            # 二值模式：生成 0/1 分布的渗透系数（匹配真实 PDEBench 数据集）
+            # 真实数据集的渗透系数是二值的，0和1各占约50%
+            permeability = torch.bernoulli(
+                torch.full((resolution, resolution), 0.5, device=device)
+            ).float()
+
+            # 使用真实的椭圆 PDE 求解器
+            # 为了提高效率，减少迭代次数
+            solution = solve_elliptic_pde_2d(
+                permeability,
+                forcing=torch.ones((resolution, resolution), device=device),
+                boundary_value=0.0,
+                n_iter=1000,  # 减少迭代次数
+                tol=1e-4,
+                device=device
+            )
+
+            # 归一化输出到真实数据范围 [-0.5, 2.5]
+            solution_norm = (solution - solution.min()) / (solution.max() - solution.min() + 1e-8)
+            solution = solution_norm * 3.0 - 0.5  # 映射到 [-0.5, 2.5]
+        else:
+            # 原始高斯模式
+            permeability = gaussian_random_field_2d(
+                resolution, alpha=2.5, tau=3.0, sigma=1.0, device=device
+            )
+
+            # 取正值并归一化到 [0.1, 10]
+            permeability = torch.exp(permeability)
+
+            # 求解 Darcy Flow
+            solution = solve_darcy_flow_fast(permeability, n_iter=500, device=device)
+
         inputs.append(permeability)
         outputs.append(solution)
-        
+
         if verbose and (i + 1) % 100 == 0:
             elapsed = time.time() - t0
             eta = elapsed / (i + 1) * (n_total - i - 1)

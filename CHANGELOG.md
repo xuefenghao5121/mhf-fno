@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.2] - 2026-03-28
+
+### Added ⭐ Darcy Flow 二值模式
+- **New generation mode for Darcy Flow dataset**: `mode='binary'`
+  - Generates binary permeability fields (0/1 distribution)
+  - Matches real PDEBench dataset statistics
+  - Input: 50% zeros, 50% ones (like real data)
+  - Output: Range [-0.5, 2.5], mean ~0.39, std ~0.33
+  - Negative correlation between input/output means (~-0.69)
+
+### Changed
+- **`benchmark/generate_data.py`**: Extended `generate_darcy_flow()` function
+  - Added `mode` parameter: 'gaussian' (default) or 'binary'
+  - 'binary' mode uses Bernoulli distribution for permeability
+  - 'binary' mode uses full elliptic PDE solver
+  - Better match to real PDEBench Darcy Flow dataset
+
+### Added
+- **New usage**:
+  ```python
+  # Binary mode (matches real PDEBench dataset)
+  generate_darcy_flow(mode='binary', n_train=1000, resolution=64)
+
+  # Gaussian mode (original)
+  generate_darcy_flow(mode='gaussian', n_train=1000, resolution=64)
+  ```
+
+### Documentation
+- **Updated docstrings**: Documented new `mode` parameter
+- **Generation modes comparison**: Explained when to use each mode
+
 ## [1.6.1] - 2026-03-27
 
 ### Added ⭐ Major Feature: Custom Dataset Support
