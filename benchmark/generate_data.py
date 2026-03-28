@@ -201,7 +201,7 @@ def solve_darcy_flow_fast(
 def solve_burgers_1d(
     n_points: int = 1024,
     viscosity: float = 0.1,
-    dt: float = 0.001,
+    dt: float = 0.0001,
     n_steps: int = 100,
     device: str = 'cpu'
 ) -> Tuple[torch.Tensor, torch.Tensor]:
