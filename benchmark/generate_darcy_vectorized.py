@@ -175,14 +175,51 @@ def generate_darcy_flow_vectorized(
                 device=device
             )
             
-            # 归一化输出到真实数据范围 [-0.5, 2.5]
+            # 归一化输出到目标范围 [-0.43, 2.23]，同时调整均值
             solution_range = solution.max() - solution.min()
             if solution_range > 1e-8:
+                # 归一化到 [0, 1]
                 solution_norm = (solution - solution.min()) / solution_range
-                solution = solution_norm * 3.0 - 0.5
+
+                # 计算当前统计
+                current_mean = solution_norm.mean()
+                current_std = solution_norm.std()
+
+                # 目标统计（基于真实数据集）
+                target_mean = 0.39  # 目标均值
+                target_std = 0.33  # 目标标准差
+
+                # 调整：使用 sqrt 变换来调整偏度
+                # 如果分布偏向负侧（均值 < 0.5），用 sqrt 增加小值的权重
+                if current_mean < 0.5:
+                    # sqrt 变换将小值映射到更大的值
+                    solution_adjusted = torch.sqrt(solution_norm)
+                    # 重新归一化到 [0, 1]
+                    solution_adjusted = (solution_adjusted - solution_adjusted.min()) / (solution_adjusted.max() - solution_adjusted.min() + 1e-8)
+                else:
+                    solution_adjusted = solution_norm
+
+                # 调整均值到目标位置（相对于 [0, 1] 的归一化均值）
+                # 目标均值在 [-0.43, 2.23] 范围内是：0.39
+                # 归一化到 [0, 1] 后的目标均值：(0.39 - (-0.43)) / (2.23 - (-0.43)) ≈ 0.33
+                target_norm_mean = (target_mean - (-0.43)) / (2.23 - (-0.43))
+
+                # 计算需要的平移
+                shift = target_norm_mean - solution_adjusted.mean()
+
+                # 应用平移
+                solution_norm_shifted = solution_adjusted + shift
+
+                # 调整标准差
+                current_std_after_shift = solution_norm_shifted.std()
+                scale = target_std / (current_std_after_shift * (2.23 - (-0.43)) + 1e-8)
+                solution_norm_final = 0.5 + (solution_norm_shifted - 0.5) * scale
+
+                # 映射到目标范围
+                solution = solution_norm_final * 2.66 - 0.43
             else:
-                # 如果解是常数，直接归一化
-                solution = torch.ones_like(solution) * boundary_value
+                # 如果解是常数，使用目标均值
+                solution = torch.ones_like(solution) * target_mean
         else:
             # 高斯模式
             kx = torch.fft.fftfreq(resolution, d=1.0, device=device)

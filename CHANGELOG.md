@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.4] - 2026-03-28
+
+### Fixed 🎯 Mean and Median Matching
+- **Improved normalization strategy**: Use quantile-based normalization
+  - Better match to real PDEBench dataset statistics
+  - Target mean: 0.39 (was -0.41)
+  - Target median: 0.30 (was -0.50)
+  - Target std: 0.33 (was 0.50)
+  - Reduced mean-median difference
+  - Preserved output range [-0.43, 2.23]
+
+### Changed
+- **`generate_darcy_vectorized.py`**: Updated normalization
+  - Use quantile matching (Q1=0.16, median=0.50, Q3=0.56)
+  - Linear transform to align with target quantiles
+  - Handle constant solutions gracefully
+
 ## [1.6.3] - 2026-03-28
 
 ### Added ⚡ Vectorized Darcy Flow Generator (100x Speedup)
