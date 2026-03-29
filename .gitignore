@@ -101,3 +101,4 @@ docs/paper-notes/*.md
 !CONTRIBUTING.md
 !LICENSE
 !TIANYUAN_CONFIG.md
+*.py[cod]
