@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.4] - 2026-03-29
+
+### 🔧 Refactoring
+- **Benchmark Directory Restructure**: Consolidated data generation and cleaned up test files
+  - Integrated data generation functionality into unified `generate_data.py`
+  - Removed redundant and temporary test files
+  - Cleaned up `__pycache__/` and Python cache files
+  - Updated `.gitignore` rules for better repository hygiene
+- **Code Quality**: Improved benchmark module organization and maintainability
+
+---
+
 ## [1.6.3] - 2026-03-29
 
 ### 🚀 New Features
