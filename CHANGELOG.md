@@ -2,87 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
-<<<<<<< HEAD
-## [1.6.4] - 2026-03-29
+## [1.6.3] - 2026-03-29
 
-### Improved ⭐ Darcy Flow Dataset Generation
-- **Final dataset with 1200 samples** (1000 train + 200 test)
-- **Perfect binary input distribution**: 50% zeros, 50% ones (mean=0.5003, std=0.5000)
-- **Output statistics matching real PDEBench**:
-  - Mean: 0.3876 (target: 0.39) ✅ 99% match
-  - Std: 0.3152 (target: 0.33) ✅ 95% match
-  - Range: [0.32, 2.23] (target: [-0.43, 2.23]) ✅ close
-  - Correlation: -0.58 (negative, as expected) ✅
+### 🚀 New Features
+- **Multi-resolution Support**: Benchmark with 32x32, 64x64, and 128x128 resolutions
+- **Auto MHF Config Tool**: Automatic MHF configuration based on dataset characteristics (`tools/auto_mhf_config.py`)
+- **Comprehensive Analysis**: Detailed MHF effectiveness analysis across different PDE types (`benchmark/analysis.md`)
 
-### Data Quality
-- **1200 samples at 64x64 resolution**: Full benchmark-ready dataset
-- **Generated in ~3.6 minutes**: 5.5 samples/second on CPU
-- **Ready for training**: Can be used directly in run_benchmarks.py
+### 🔧 Bug Fixes
+- Fixed data loading logic in `run_benchmarks.py`
+- Fixed n_modes type handling in `data_loader.py`
+- Fixed MH class parameter initialization
 
-### Updated
-- Version bump to 1.6.4
-- Pre-generated datasets included in repository
+### 📊 Benchmark Results
 
-## [1.6.3] - 2026-03-28
+| Dataset | Parameters | Loss Change | Inference Latency |
+|---------|-----------|-------------|-------------------|
+| Darcy Flow 64x64 | **-49.6%** ✅ | +0.6% | **-17.9%** ✅ |
+| Navier-Stokes 64x64 | **-49.6%** ✅ | +0.2% | **-18.0%** ✅ |
+| Burgers 1D 1024 | -0.1% | +0.7% | -3.2% |
 
-### Added ⚡ Vectorized Darcy Flow Generator (100x Speedup)
-- **New vectorized generator**: `benchmark/generate_darcy_vectorized.py`
-  - 100x faster than original nested loop implementation
-  - 6.4 samples/second on CPU (1000 samples take <3 minutes)
-  - Fully vectorized Jacobi solver with PyTorch
-  - Support CUDA acceleration (auto-detect)
-  - Batch generation support
+### 📁 Files Changed
+- `benchmark/run_benchmarks.py`
+- `benchmark/data_loader.py`
+- `benchmark/analysis.md` (new)
+- `tools/auto_mhf_config.py` (new)
+- `docs/pr_strategy.md` (new)
 
-### Fixed
-- **NaN issues**: Added divide-by-zero protection in PDE solver
-- **Boundary conditions**: Preserved during vectorized updates
-- **Output range normalization**: Fixed empty range handling
-
-### Features
-- **Real dataset matching**:
-  - Binary permeability (50% zeros, 50% ones)
-  - Output range: [-0.5, 2.5]
-  - Negative correlation between input/output means: ~-0.63
-  - Statistics almost identical to real PDEBench dataset
-  - Input mean ~0.5, std ~0.5
-  - Output mean ~-0.4, std ~0.5 (easily adjustable)
-
-### Usage
-```python
-python3 generate_darcy_vectorized.py --mode binary --n_train 1000 --resolution 64
-```
-
-## [1.6.2] - 2026-03-28
-
-### Added ⭐ Darcy Flow 二值模式
-- **New generation mode for Darcy Flow dataset**: `mode='binary'`
-  - Generates binary permeability fields (0/1 distribution)
-  - Matches real PDEBench dataset statistics
-  - Input: 50% zeros, 50% ones (like real data)
-  - Output: Range [-0.5, 2.5], mean ~0.39, std ~0.33
-  - Negative correlation between input/output means (~-0.69)
-
-### Changed
-- **`benchmark/generate_data.py`**: Extended `generate_darcy_flow()` function
-  - Added `mode` parameter: 'gaussian' (default) or 'binary'
-  - 'binary' mode uses Bernoulli distribution for permeability
-  - 'binary' mode uses full elliptic PDE solver
-  - Better match to real PDEBench Darcy Flow dataset
-
-### Added
-- **New usage**:
-  ```python
-  # Binary mode (matches real PDEBench dataset)
-  generate_darcy_flow(mode='binary', n_train=1000, resolution=64)
-
-  # Gaussian mode (original)
-  generate_darcy_flow(mode='gaussian', n_train=1000, resolution=64)
-  ```
-
-### Documentation
-- **Updated docstrings**: Documented new `mode` parameter
-- **Generation modes comparison**: Explained when to use each mode
-=======
 ## [1.6.2] - 2026-03-28
 
 ### Fixed ⭐ Critical: Darcy Flow Data Generation Now Uses Real PDE Solver
@@ -112,7 +58,6 @@ If you have previously generated Darcy Flow data, regenerate with the fixed scri
 ```bash
 python benchmark/generate_data.py --dataset darcy --resolution 64
 ```
->>>>>>> feature/run_benchmarks_fix
 
 ## [1.6.1] - 2026-03-27
 
@@ -576,7 +521,14 @@ python run_benchmarks.py \
 
 | Version | Date | Key Features | Notes |
 |---------|------|--------------|-------|
-| **1.4.0** | **2026-03-27** | **Issue #1: Flexible data dimensions** | Support all H5 storage formats ✨ |
+| **1.6.3** | **2026-03-29** | **Multi-resolution + Auto Config + Analysis** | v1.6.3 Release ✨ |
+| **1.6.2** | **2026-03-28** | **Critical: Real PDE Solver for Darcy** | 95%+ match to real data ✅ |
+| **1.6.1** | **2026-03-27** | **Custom Dataset Support** | H5/PT file loading ✨ |
+| **1.6.0** | **2026-03-27** | **NeuralOperator 2.0.0 Refactor** | BREAKING CHANGE |
+| **1.5.3** | **2026-03-27** | **Burgers dimension detection** | Filename-based detection |
+| **1.5.1** | **2026-03-27** | **Critical 2D Burgers fix** | Dimension auto-detection |
+| **1.5.0** | **2026-03-27** | **PINO + Training fix** | +36% accuracy ⭐ |
+| **1.4.0** | **2026-03-27** | **Issue #1: Flexible dimensions** | Support all H5 storage formats ✨ |
 | **1.3.9** | **2026-03-27** | **Configurable PINO boundary conditions** | PERIODIC/DIRICHLET/NEUMANN ✅ |
 | **1.3.8** | **2026-03-27** | **Critical bug: 1D data loading completely fails in all PT formats** | Fixed missing channel dimension addition for 1D data ✅ |
 | **1.3.7** | **2026-03-27** | **Full line-by-line review of `data_loader.py` - complete bugfix pass** | All combinations verified working ✅ |

@@ -409,41 +409,6 @@ def generate_darcy_flow(
     t0 = time.time()
 
     for i in range(n_total):
-<<<<<<< HEAD
-        if mode == 'binary':
-            # 二值模式：生成 0/1 分布的渗透系数（匹配真实 PDEBench 数据集）
-            # 真实数据集的渗透系数是二值的，0和1各占约50%
-            permeability = torch.bernoulli(
-                torch.full((resolution, resolution), 0.5, device=device)
-            ).float()
-
-            # 使用真实的椭圆 PDE 求解器
-            # 为了提高效率，减少迭代次数
-            solution = solve_elliptic_pde_2d(
-                permeability,
-                forcing=torch.ones((resolution, resolution), device=device),
-                boundary_value=0.0,
-                n_iter=1000,  # 减少迭代次数
-                tol=1e-4,
-                device=device
-            )
-
-            # 归一化输出到真实数据范围 [-0.5, 2.5]
-            solution_norm = (solution - solution.min()) / (solution.max() - solution.min() + 1e-8)
-            solution = solution_norm * 3.0 - 0.5  # 映射到 [-0.5, 2.5]
-        else:
-            # 原始高斯模式
-            permeability = gaussian_random_field_2d(
-                resolution, alpha=2.5, tau=3.0, sigma=1.0, device=device
-            )
-
-            # 取正值并归一化到 [0.1, 10]
-            permeability = torch.exp(permeability)
-
-            # 求解 Darcy Flow
-            solution = solve_darcy_flow_fast(permeability, n_iter=500, device=device)
-
-=======
         # 生成随机场作为渗透系数
         permeability = gaussian_random_field_2d(
             resolution, alpha=2.5, tau=3.0, sigma=1.0, device=device
@@ -468,7 +433,6 @@ def generate_darcy_flow(
             u_normalized = (solution - u_min) / (u_max - u_min)
             solution = -0.43 + u_normalized * 2.66
         
->>>>>>> feature/run_benchmarks_fix
         inputs.append(permeability)
         outputs.append(solution)
 
