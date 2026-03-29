@@ -1,103 +1,40 @@
 # Python
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
+*.pyc
+*.pyo
+*.pyd
 .Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
+*.so
 *.egg
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.venv/
+venv/
+ENV/
 
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# Data files
-data/*.pt
-data/*.h5
-data/*.mat
-!data/README.md
-
-# Results
-*.json
-!requirements.json
-*.log
-*.txt
-!README.txt
-!LICENSE.txt
-
-# IDEs
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
+# Data
+data/
+*.pt
+*.pth
+*.h5
+*.hdf5
+
+# Logs
+*.log
+logs/
+
 # OS
 .DS_Store
 Thumbs.db
-
-# Model checkpoints
-checkpoints/
-*.pth
-*.ckpt
-
-# TensorBoard
-runs/
-logs/
-
-# Temporary files
-tmp/
-temp/
-*.tmp
-
-# Paper notes (not for GitHub)
-docs/paper-notes/
-!docs/paper-notes/.gitkeep
-
-# Config files with sensitive info
-config.local.*
-.env
-
-# Model checkpoints
-examples/checkpoints/
-*.pth
-*.ckpt
-
-# Team memory files (local)
-MEMORY.md
-*.log
-
-# Benchmark temporary files
-benchmark/test_*.log
-benchmark/tmp_*.py
-benchmark/data/ns_real_velocity.pt
-
-# Research documents (local only, not for GitHub)
-*_REPORT.md
-*_SUMMARY.md
-*_NOTES.md
-*_DIAGNOSIS.md
-*_OPTIMIZATION*.md
-*_ANALYSIS.md
-docs/paper-notes/*.md
-!docs/paper-notes/.gitkeep
-
-# Keep only essential docs for GitHub
-!README.md
-!QUICK_START.md
-!CHANGELOG.md
-!CONTRIBUTING.md
-!LICENSE
-!TIANYUAN_CONFIG.md

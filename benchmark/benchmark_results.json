@@ -1,0 +1,68 @@
+{
+  "config": {
+    "n_train": 100,
+    "n_test": 20,
+    "epochs": 3,
+    "batch_size": 16,
+    "learning_rate": 0.001,
+    "seed": 42,
+    "data_format": "pt",
+    "data_path": null,
+    "train_path": "/root/.openclaw/workspace/tianyuan-mhf-fno/data/burgers_train_1024_fixed_v2.pt",
+    "test_path": "/root/.openclaw/workspace/tianyuan-mhf-fno/data/burgers_test_1024_fixed_v2.pt",
+    "resolution": null,
+    "viscosity": 0.001,
+    "n_steps": 100
+  },
+  "results": {
+    "burgers": {
+      "dataset": {
+        "name": "\u5ba2\u6237\u6570\u636e\u96c6 (PT)",
+        "resolution": "1024",
+        "n_train": 100,
+        "n_test": 20,
+        "input_channels": 1,
+        "output_channels": 1,
+        "n_modes": [
+          512
+        ],
+        "is_2d": false
+      },
+      "models": {
+        "FNO": {
+          "parameters": 800433,
+          "train_losses": [
+            0.9806328756468636,
+            0.9264991198267255,
+            0.8620172483580453
+          ],
+          "test_losses": [
+            0.8346408605575562,
+            0.8346408605575562,
+            0.8346408605575562
+          ],
+          "best_test_loss": 0.8346408605575562,
+          "avg_epoch_time": 0.8401187260945638,
+          "inference_ms": 10.475072860717773
+        },
+        "MHF-FNO": {
+          "parameters": 799409,
+          "train_losses": [
+            0.9812815359660557,
+            0.928981329713549,
+            0.8669875093868801
+          ],
+          "test_losses": [
+            0.8407068252563477,
+            0.8407068252563477,
+            0.8407068252563477
+          ],
+          "best_test_loss": 0.8407068252563477,
+          "avg_epoch_time": 0.8572944005330404,
+          "inference_ms": 10.140888690948486
+        }
+      }
+    }
+  },
+  "timestamp": "2026-03-29T04:20:01.456378"
+}
