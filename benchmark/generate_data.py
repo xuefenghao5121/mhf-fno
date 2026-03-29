@@ -163,16 +163,19 @@ def solve_elliptic_pde_2d(
     return u
 
 
-def solve_darcy_flow_fast(
+def solve_darcy_flow_fast_DEPRECATED(
     permeability: torch.Tensor,
     forcing: Optional[torch.Tensor] = None,
     n_iter: int = 500,
     device: str = 'cpu'
 ) -> torch.Tensor:
     """
-    快速生成 Darcy Flow 风格的解 (简化版本)
+    [DEPRECATED] 快速生成 Darcy Flow 风格的解 (简化版本)
     
-    对于 MHF-FNO 测试，使用简化方法生成有物理意义的平滑解。
+    此函数已废弃，因为它不求解真实的 Darcy 方程。
+    请使用 solve_elliptic_pde_2d() 代替。
+    
+    保留此函数仅为向后兼容。
     """
     H, W = permeability.shape
     
@@ -406,6 +409,7 @@ def generate_darcy_flow(
     t0 = time.time()
 
     for i in range(n_total):
+<<<<<<< HEAD
         if mode == 'binary':
             # 二值模式：生成 0/1 分布的渗透系数（匹配真实 PDEBench 数据集）
             # 真实数据集的渗透系数是二值的，0和1各占约50%
@@ -439,6 +443,32 @@ def generate_darcy_flow(
             # 求解 Darcy Flow
             solution = solve_darcy_flow_fast(permeability, n_iter=500, device=device)
 
+=======
+        # 生成随机场作为渗透系数
+        permeability = gaussian_random_field_2d(
+            resolution, alpha=2.5, tau=3.0, sigma=1.0, device=device
+        )
+        
+        # 归一化到 [0, 1] 范围（真实数据特性）
+        permeability = torch.sigmoid(permeability * 2)
+        
+        # 求解 Darcy Flow（使用真实的 PDE 求解器）
+        solution = solve_elliptic_pde_2d(
+            permeability,
+            forcing=None,
+            boundary_value=0.0,
+            n_iter=2000,  # 增加迭代次数确保收敛
+            tol=1e-6,
+            device=device
+        )
+        
+        # 归一化到真实数据的范围 [-0.43, 2.23]
+        u_min, u_max = solution.min(), solution.max()
+        if u_max > u_min:
+            u_normalized = (solution - u_min) / (u_max - u_min)
+            solution = -0.43 + u_normalized * 2.66
+        
+>>>>>>> feature/run_benchmarks_fix
         inputs.append(permeability)
         outputs.append(solution)
 

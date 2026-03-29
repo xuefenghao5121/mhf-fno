@@ -18,7 +18,11 @@ with open("requirements.txt", "r", encoding="utf-8") as fh:
 
 setup(
     name="mhf-fno",
+<<<<<<< HEAD
     version="1.6.4",
+=======
+    version="1.6.2",
+>>>>>>> feature/run_benchmarks_fix
     author="Tianyuan Team",
     author_email="tianyuan@example.com",
     description="Multi-Head Fourier Neural Operator with Cross-Head Attention (CoDA)",
