@@ -32,3 +32,11 @@ ENV/
 .DS_Store
 Thumbs.db
 version.json
+
+# Project-specific
+version.json
+checkpoints/
+logs/
+results/
+deprecated/
+workspace_status_summary.md
