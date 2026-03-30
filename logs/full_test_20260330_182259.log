@@ -1,0 +1,12 @@
+============================================================
+完整对比测试 - 50 epochs + 6 种配置 + 3 个 数据集
+============================================================
+开始时间: 2026-03-30 18:23:00
+
+设备: cpu
+
+Traceback (most recent call last):
+  File "/home/huawei/.openclaw/workspace/tianyuan-mhf-fno/benchmark/full_comparison_test.py", line 46, in <module>
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+         ^^^^^
+NameError: name 'Tuple' is not defined. Did you mean: 'tuple'?

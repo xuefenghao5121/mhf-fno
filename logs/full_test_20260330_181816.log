@@ -1,0 +1,4 @@
+  File "/home/huawei/.openclaw/workspace/tianyuan-mhf-fno/benchmark/full_comparison_test.py", line 33
+    device = torch.device('cuda' if torch.cuda.is_available() else torch.device('cpu')
+                         ^
+SyntaxError: '(' was never closed

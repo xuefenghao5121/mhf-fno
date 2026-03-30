@@ -34,7 +34,7 @@ MHF-FNO 是对标准 Fourier Neural Operator (FNO) 的改进：
 
 ## 📊 性能对比
 
-### 最新突破 (v1.3.0)
+### 最新突破 (v1.6.4)
 
 **真实 Navier-Stokes 数据 + MHF+CoDA+PINO**
 
@@ -369,4 +369,4 @@ MIT License - 详见 [LICENSE](LICENSE)
 ---
 
 **最后更新**: 2026-03-26
-**版本**: v1.3.4
+**版本**: v1.6.4

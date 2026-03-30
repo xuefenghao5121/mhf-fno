@@ -1,41 +1,39 @@
 """
-MHF-FNO 数据加载器 (v1.6.1 - Bugfix)
+MHF-FNO 数据加载器 (v1.6.4 - 真实数据路径集成)
 
 支持多种数据源：
 1. NeuralOperator 官方数据集 (NavierStokes, Darcy)
-2. 客户提供的本地 H5 文件 (train/test分离)
+2. 真实数据路径的本地 PT 文件
 3. 客户提供的本地 PT/Torch 文件
 
+真实数据路径: /home/huawei/Desktop/home/xuefenghao/workspace/mhf-data/
+- Darcy Flow 32x32: darcy_train_32.pt / darcy_test_32.pt
+- Navier-Stokes 128x128: nsforcing_train_128.pt / nsforcing_test_128.pt
+- Burgers: burgers/ 目录下 3 个 .mat 文件
+
 数据格式支持：
-- H5格式：Zenodo格式、PDEBench格式、自定义H5
 - PT格式：.pt, .pth (PyTorch格式）
+- MAT格式：.mat (MATLAB格式，用于Burgers)
 - 支持多种维度：[N, L], [N, C, L], [N, H, W], [N, C, H, W]
 
 使用示例:
     >>> from data_loader import load_dataset
     >>>
-    >>> # 1. 加载 NeuralOperator 官方数据集
+    >>> # 1. 加载真实数据路径的 Darcy 数据
+    >>> train_x, train_y, test_x, test_y, info = load_dataset(
+    >>>     dataset_name='darcy',
+    >>>     n_train=1000, n_test=200, resolution=32,
+    >>> )
+    >>>
+    >>> # 2. 加载真实数据路径的 Navier-Stokes 数据
     >>> train_x, train_y, test_x, test_y, info = load_dataset(
     >>>     dataset_name='navier_stokes',
-    >>>     n_train=1000, n_test=200, resolution=64,
-    >>>     download=False,
+    >>>     n_train=1000, n_test=200, resolution=128,
     >>> )
     >>>
-    >>> # 2. 加载客户提供的 H5 文件 (train/test分离)
+    >>> # 3. 加载真实数据路径的 Burgers 数据
     >>> train_x, train_y, test_x, test_y, info = load_dataset(
-    >>>     dataset_name='custom',
-    >>>     data_format='h5',
-    >>>     train_path='./data/client_train.h5',
-    >>>     test_path='./data/client_test.h5',
-    >>>     n_train=1000, n_test=200, resolution=64,
-    >>> )
-    >>>
-    >>> # 3. 加载客户提供的 PT 文件
-    >>> train_x, train_y, test_x, test_y, info = load_dataset(
-    >>>     dataset_name='custom',
-    >>>     data_format='pt',
-    >>>     train_path='./data/client_train.pt',
-    >>>     test_path='./data/client_test.pt',
+    >>>     dataset_name='burgers',
     >>>     n_train=1000, n_test=200,
     >>> )
 """
@@ -44,6 +42,12 @@ import torch
 import numpy as np
 from pathlib import Path
 from typing import Union, Tuple, Dict, Optional
+
+# 真实数据路径
+REAL_DATA_PATH = Path("/home/huawei/Desktop/home/xuefenghao/workspace/mhf-data")
+
+# Burgers 数据路径
+BURGERS_PATH = REAL_DATA_PATH / "burgers"
 
 try:
     from neuralop.data.datasets import (
@@ -60,6 +64,12 @@ try:
     HAS_H5PY = True
 except ImportError:
     HAS_H5PY = False
+
+try:
+    from scipy.io import loadmat
+    HAS_SCIPY = True
+except ImportError:
+    HAS_SCIPY = False
 
 
 def _check_file_exists(file_path: str) -> None:
