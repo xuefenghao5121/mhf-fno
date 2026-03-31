@@ -59,7 +59,7 @@ __all__ = [
     "MHFFNO",
     "PINOLoss",
     "get_device",
-    "check_cuda",
+    "check_cuda_memory",
     
     # MHF-FNO 跨头注意力 (CODA = Cross-Head Attention)
     "CrossHeadAttention",
