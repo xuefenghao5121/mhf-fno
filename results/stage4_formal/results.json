@@ -1,9 +1,0 @@
-{
-  "MHF+CoDA+AFNO": {
-    "test_mse": 0.07285602,
-    "test_lp": 0.520189,
-    "params": 236977,
-    "inference_ms": 5.35,
-    "train_time_s": 32.1
-  }
-}

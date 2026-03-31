@@ -1,6 +1,0 @@
-{
-  "MHF+CoDA": {
-    "status": "error",
-    "error": "make_mhf_coda_2d() got an unexpected keyword argument 'train_x'"
-  }
-}

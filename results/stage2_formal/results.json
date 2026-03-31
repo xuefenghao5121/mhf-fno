@@ -1,9 +1,0 @@
-{
-  "MHF+CoDA": {
-    "test_mse": 0.02048468,
-    "test_lp": 0.267562,
-    "params": 232177,
-    "inference_ms": 2.04,
-    "train_time_s": 11.6
-  }
-}

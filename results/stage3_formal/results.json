@@ -1,9 +1,0 @@
-{
-  "MHF+AFNO": {
-    "test_mse": 0.07632317,
-    "test_lp": 0.533282,
-    "params": 75217,
-    "inference_ms": 2.46,
-    "train_time_s": 8.4
-  }
-}
