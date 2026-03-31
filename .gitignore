@@ -88,6 +88,13 @@ test_minimal.py
 test_quick.py
 test_stage5.py
 
+# Experimental mhf_fno files
+mhf_fno/adaptive_physics_weights.py
+mhf_fno/fa_pino_loss.py
+mhf_fno/physics_attention.py
+mhf_fno/progressive_scheduler.py
+mhf_fno/spectral_physics_joint.py
+
 # Log files
 *.log
 
