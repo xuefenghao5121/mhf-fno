@@ -98,6 +98,14 @@ mhf_fno/spectral_physics_joint.py
 # Log files
 *.log
 
+# Report files
+第二阶段实验结果汇总.md
+第二阶段执行报告.md
+第一阶段完成报告.md
+FINAL_EXPERIMENT_SUMMARY.md
+coda_correction_report.md
+workspace_status_summary.md
+
 # Reports
 *.md
 !README.md
