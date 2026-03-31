@@ -1,0 +1,116 @@
+{
+  "darcy": [
+    {
+      "name": "MHF+CoDA",
+      "test_mse": 0.006934302859008312,
+      "lp_error": 7.393152236938477,
+      "params": 308411,
+      "train_time_s": 15.8,
+      "latency_ms": 5.5
+    },
+    {
+      "name": "FNO",
+      "test_mse": 0.0058073969557881355,
+      "lp_error": 7.015811920166016,
+      "params": 453361,
+      "train_time_s": 17.1,
+      "latency_ms": 3.6
+    }
+  ],
+  "ns": [
+    {
+      "name": "MHF+CoDA",
+      "test_mse": 0.13628636300563812,
+      "lp_error": 10.180171966552734,
+      "params": 308411,
+      "train_time_s": 116.4,
+      "latency_ms": 10.2
+    },
+    {
+      "name": "FNO",
+      "test_mse": 0.1368235945701599,
+      "lp_error": 10.188482284545898,
+      "params": 453361,
+      "train_time_s": 118.7,
+      "latency_ms": 11.9
+    }
+  ],
+  "burgers_uniform": [
+    {
+      "name": "MHF+CoDA",
+      "test_mse": 7.02516399542219e-06,
+      "lp_error": 0.23627613484859467,
+      "params": 6305851,
+      "train_time_s": 6695.2,
+      "latency_ms": 435.8
+    },
+    {
+      "name": "MHF-FNO",
+      "test_mse": 6.0399702306312975e-06,
+      "lp_error": 0.2529982328414917,
+      "params": 6303409,
+      "train_time_s": 5186.4,
+      "latency_ms": 15.6
+    },
+    {
+      "name": "FNO",
+      "test_mse": 2.7349875381332822e-05,
+      "lp_error": 0.5973812341690063,
+      "params": 6305393,
+      "train_time_s": 6037.6,
+      "latency_ms": 29.2
+    }
+  ],
+  "burgers_rand": [
+    {
+      "name": "MHF+CoDA",
+      "test_mse": 0.001954477047547698,
+      "lp_error": 5.922195911407471,
+      "params": 63547,
+      "train_time_s": 33.1,
+      "latency_ms": 1.1
+    },
+    {
+      "name": "MHF-FNO",
+      "test_mse": 0.0013461060589179397,
+      "lp_error": 4.756025314331055,
+      "params": 61105,
+      "train_time_s": 28.2,
+      "latency_ms": 0.8
+    },
+    {
+      "name": "FNO",
+      "test_mse": 0.0031720984261482954,
+      "lp_error": 7.872237205505371,
+      "params": 63089,
+      "train_time_s": 38.1,
+      "latency_ms": 0.8
+    }
+  ],
+  "burgers_conexp": [
+    {
+      "name": "MHF+CoDA",
+      "test_mse": 0.0022027657832950354,
+      "lp_error": 5.548299789428711,
+      "params": 63547,
+      "train_time_s": 32.7,
+      "latency_ms": 1.1
+    },
+    {
+      "name": "MHF-FNO",
+      "test_mse": 0.00015816798259038478,
+      "lp_error": 1.4321962594985962,
+      "params": 61105,
+      "train_time_s": 25.7,
+      "latency_ms": 0.9
+    },
+    {
+      "name": "FNO",
+      "test_mse": 0.0024636387825012207,
+      "lp_error": 5.914525508880615,
+      "params": 63089,
+      "train_time_s": 38.2,
+      "latency_ms": 2.1
+    }
+  ]
+}

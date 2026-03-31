@@ -1,0 +1,162 @@
+{
+  "timestamp": "2026-03-31T00:27:40.177645",
+  "config": {
+    "seed": 42,
+    "epochs": 5,
+    "batch_size": 32,
+    "lr": 0.001,
+    "n_modes": [
+      16,
+      16
+    ],
+    "hidden_channels": 64,
+    "n_heads": 2,
+    "mhf_layers": [
+      0
+    ],
+    "train_samples": 50,
+    "test_samples": 20,
+    "device": "cpu",
+    "pino_lambda": 0.01
+  },
+  "results": {
+    "1_Baseline": {
+      "test_mse": 0.49464210867881775,
+      "test_lp": 19.673017501831055,
+      "latency_ms": 34.503,
+      "params": 1517025,
+      "extra_params": 0,
+      "total_params": 1517025,
+      "name": "1_Baseline",
+      "description": "Baseline (no PINO)"
+    },
+    "2_Uniform_PINO": {
+      "test_mse": 0.4946421682834625,
+      "test_lp": 19.673017501831055,
+      "latency_ms": 35.206,
+      "params": 1517025,
+      "extra_params": 0,
+      "total_params": 1517025,
+      "name": "2_Uniform_PINO",
+      "description": "Uniform PINO (λ=0.01)"
+    },
+    "3_FA_PINO": {
+      "test_mse": 0.5101423859596252,
+      "test_lp": 19.98520278930664,
+      "latency_ms": 34.728,
+      "params": 1517025,
+      "extra_params": 0,
+      "total_params": 1517025,
+      "name": "3_FA_PINO",
+      "description": "FA-PINO (frequency-aware)"
+    },
+    "4_PSPT": {
+      "test_mse": 0.4946421980857849,
+      "test_lp": 19.673017501831055,
+      "latency_ms": 35.452,
+      "params": 1517025,
+      "extra_params": 0,
+      "total_params": 1517025,
+      "name": "4_PSPT",
+      "description": "PSPT (progressive)"
+    },
+    "5_FA_PINO_PSPT": {
+      "test_mse": 0.4946421980857849,
+      "test_lp": 19.673017501831055,
+      "latency_ms": 34.272,
+      "params": 1517025,
+      "extra_params": 0,
+      "total_params": 1517025,
+      "name": "5_FA_PINO_PSPT",
+      "description": "FA-PINO + PSPT"
+    },
+    "6_AFP_PINO": {
+      "test_mse": 0.4952054023742676,
+      "test_lp": 19.685766220092773,
+      "latency_ms": 33.992,
+      "params": 1517025,
+      "extra_params": 2,
+      "total_params": 1517027,
+      "name": "6_AFP_PINO",
+      "description": "AFP-PINO (adaptive)"
+    },
+    "7_SP_JR": {
+      "test_mse": 0.5109277963638306,
+      "test_lp": 20.00082778930664,
+      "latency_ms": 34.277,
+      "params": 1517025,
+      "extra_params": 0,
+      "total_params": 1517025,
+      "name": "7_SP_JR",
+      "description": "SP-JR (spectral-physics joint)"
+    },
+    "8_FDPA": {
+      "test_mse": 0.49464210867881775,
+      "test_lp": 19.673017501831055,
+      "latency_ms": 34.675,
+      "params": 1517025,
+      "extra_params": 0,
+      "total_params": 1517025,
+      "name": "8_FDPA",
+      "description": "FDPA (physics attention)"
+    }
+  },
+  "training_history": {
+    "1_Baseline": [
+      0.46210044622421265,
+      0.4582540690898895,
+      0.45375795662403107,
+      0.450155109167099,
+      0.44808924198150635
+    ],
+    "2_Uniform_PINO": [
+      0.46210047602653503,
+      0.4582540988922119,
+      0.4537580609321594,
+      0.45015522837638855,
+      0.4480894058942795
+    ],
+    "3_FA_PINO": [
+      0.6814139783382416,
+      0.6378970742225647,
+      0.4754851460456848,
+      0.5305759906768799,
+      0.5167889893054962
+    ],
+    "4_PSPT": [
+      0.46210044622421265,
+      0.4582541286945343,
+      0.453758105635643,
+      0.4501553177833557,
+      0.44808948040008545
+    ],
+    "5_FA_PINO_PSPT": [
+      0.46210044622421265,
+      0.4582541286945343,
+      0.453758105635643,
+      0.4501553177833557,
+      0.44808948040008545
+    ],
+    "6_AFP_PINO": [
+      0.46227318048477173,
+      0.4584885239601135,
+      0.4541696012020111,
+      0.45074309408664703,
+      0.44876381754875183
+    ],
+    "7_SP_JR": [
+      13.092299938201904,
+      42.962685108184814,
+      0.5589412748813629,
+      2.0239193439483643,
+      4.710906505584717
+    ],
+    "8_FDPA": [
+      0.46210044622421265,
+      0.4582540690898895,
+      0.45375795662403107,
+      0.450155109167099,
+      0.44808924198150635
+    ]
+  }
+}

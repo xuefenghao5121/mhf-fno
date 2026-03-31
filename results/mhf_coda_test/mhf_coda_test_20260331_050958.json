@@ -1,0 +1,55 @@
+{
+  "darcy": [
+    {
+      "name": "MHF+CoDA",
+      "test_mse": 0.010918634943664074,
+      "lp_error": 3.3401448726654053,
+      "params": 225136,
+      "train_time_s": 2.3,
+      "latency_ms": 2.3
+    },
+    {
+      "name": "MHF-FNO",
+      "test_mse": 0.005822482518851757,
+      "lp_error": 2.4343295097351074,
+      "params": 232177,
+      "train_time_s": 4.8,
+      "latency_ms": 2.8
+    },
+    {
+      "name": "FNO",
+      "test_mse": 0.0012784418649971485,
+      "lp_error": 1.1381431818008423,
+      "params": 453361,
+      "train_time_s": 6.5,
+      "latency_ms": 3.6
+    }
+  ],
+  "ns": [
+    {
+      "name": "MHF+CoDA",
+      "test_mse": 0.012057032436132431,
+      "lp_error": 7.027139186859131,
+      "params": 225136,
+      "train_time_s": 2.1,
+      "latency_ms": 1.6
+    },
+    {
+      "name": "MHF-FNO",
+      "test_mse": 0.011135907843708992,
+      "lp_error": 6.753417015075684,
+      "params": 232177,
+      "train_time_s": 5.3,
+      "latency_ms": 2.8
+    },
+    {
+      "name": "FNO",
+      "test_mse": 0.011225802823901176,
+      "lp_error": 6.7806196212768555,
+      "params": 453361,
+      "train_time_s": 6.8,
+      "latency_ms": 4.9
+    }
+  ],
+  "burgers_conexp": []
+}

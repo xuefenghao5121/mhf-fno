@@ -1,0 +1,132 @@
+{
+  "darcy": [
+    {
+      "name": "MHF+CoDA",
+      "test_mse": 0.0074445451609790325,
+      "lp_error": 7.6072564125061035,
+      "params": 308411,
+      "train_time_s": 291.5,
+      "latency_ms": 68.9
+    },
+    {
+      "name": "MHF-FNO",
+      "test_mse": 0.006793267093598843,
+      "lp_error": 7.345640659332275,
+      "params": 305905,
+      "train_time_s": 261.6,
+      "latency_ms": 32.0
+    },
+    {
+      "name": "FNO",
+      "test_mse": 0.0058073969557881355,
+      "lp_error": 7.015811920166016,
+      "params": 453361,
+      "train_time_s": 316.0,
+      "latency_ms": 101.0
+    }
+  ],
+  "ns": [
+    {
+      "name": "MHF+CoDA",
+      "test_mse": 0.13628636300563812,
+      "lp_error": 10.180171966552734,
+      "params": 308411,
+      "train_time_s": 372.1,
+      "latency_ms": 147.0
+    },
+    {
+      "name": "MHF-FNO",
+      "test_mse": 0.13665181398391724,
+      "lp_error": 10.184385299682617,
+      "params": 305905,
+      "train_time_s": 337.8,
+      "latency_ms": 103.5
+    },
+    {
+      "name": "FNO",
+      "test_mse": 0.1368235945701599,
+      "lp_error": 10.188482284545898,
+      "params": 453361,
+      "train_time_s": 351.5,
+      "latency_ms": 223.5
+    }
+  ],
+  "burgers_uniform": [
+    {
+      "name": "MHF+CoDA",
+      "test_mse": 0.0001371202670270577,
+      "lp_error": 0.4761478900909424,
+      "params": 6305851,
+      "train_time_s": 973.1,
+      "latency_ms": 408.2
+    },
+    {
+      "name": "MHF-FNO",
+      "test_mse": 0.00017886546265799552,
+      "lp_error": 0.5594865083694458,
+      "params": 6303409,
+      "train_time_s": 896.2,
+      "latency_ms": 413.3
+    },
+    {
+      "name": "FNO",
+      "test_mse": 0.0001599110255483538,
+      "lp_error": 0.454809308052063,
+      "params": 6305393,
+      "train_time_s": 1068.6,
+      "latency_ms": 461.9
+    }
+  ],
+  "burgers_rand": [
+    {
+      "name": "MHF+CoDA",
+      "test_mse": 0.0018070465885102749,
+      "lp_error": 5.895936965942383,
+      "params": 63547,
+      "train_time_s": 986.4,
+      "latency_ms": 101.6
+    },
+    {
+      "name": "MHF-FNO",
+      "test_mse": 0.0013461060589179397,
+      "lp_error": 4.756025314331055,
+      "params": 61105,
+      "train_time_s": 809.7,
+      "latency_ms": 51.4
+    },
+    {
+      "name": "FNO",
+      "test_mse": 0.0031720984261482954,
+      "lp_error": 7.872237205505371,
+      "params": 63089,
+      "train_time_s": 1097.2,
+      "latency_ms": 51.7
+    }
+  ],
+  "burgers_conexp": [
+    {
+      "name": "MHF+CoDA",
+      "test_mse": 0.0022027657832950354,
+      "lp_error": 5.548299789428711,
+      "params": 63547,
+      "train_time_s": 962.7,
+      "latency_ms": 29.6
+    },
+    {
+      "name": "MHF-FNO",
+      "test_mse": 0.00015816798259038478,
+      "lp_error": 1.4321962594985962,
+      "params": 61105,
+      "train_time_s": 786.2,
+      "latency_ms": 13.1
+    },
+    {
+      "name": "FNO",
+      "test_mse": 0.0024636387825012207,
+      "lp_error": 5.914525508880615,
+      "params": 63089,
+      "train_time_s": 1120.1,
+      "latency_ms": 52.1
+    }
+  ]
+}

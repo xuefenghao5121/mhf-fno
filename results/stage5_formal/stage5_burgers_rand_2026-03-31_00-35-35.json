@@ -1,0 +1,22 @@
+{
+  "FNO": {
+    "status": "error",
+    "error": "main.<locals>.<lambda>() got an unexpected keyword argument 'train_x'"
+  },
+  "MHF-FNO": {
+    "status": "error",
+    "error": "main.<locals>.<lambda>() got an unexpected keyword argument 'train_x'"
+  },
+  "MHF+CoDA": {
+    "status": "error",
+    "error": "main.<locals>.<lambda>() got an unexpected keyword argument 'train_x'"
+  },
+  "MHF+AFNO": {
+    "status": "error",
+    "error": "main.<locals>.<lambda>() got an unexpected keyword argument 'train_x'"
+  },
+  "MHF+CoDA+AFNO": {
+    "status": "error",
+    "error": "main.<locals>.<lambda>() got an unexpected keyword argument 'train_x'"
+  }
+}

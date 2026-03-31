@@ -1,0 +1,6 @@
+{
+  "MHF+AFNO": {
+    "status": "error",
+    "error": "make_mhf_afno_2d() got an unexpected keyword argument 'train_x'"
+  }
+}

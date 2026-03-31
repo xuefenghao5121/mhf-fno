@@ -1,0 +1,57 @@
+{
+  "navier_stokes_128": {
+    "FNO": {
+      "params": 150961,
+      "best_test_loss": 0.3237,
+      "inference_ms": 4.34
+    },
+    "MHF-FNO": {
+      "params": 58233,
+      "best_test_loss": 0.4805,
+      "inference_ms": 2.68
+    },
+    "MHF+CoDA": {
+      "params": 235936,
+      "best_test_loss": 0.1622389405965805,
+      "inference_ms": 6.1595916748046875
+    },
+    "MHF+AFNO": {
+      "params": 75217,
+      "best_test_loss": 0.2587084472179413,
+      "inference_ms": 2.8001785278320312
+    },
+    "MHF+CoDA+AFNO": {
+      "params": -1,
+      "best_test_loss": -1,
+      "inference_ms": -1,
+      "error": "cannot import name 'TripleFusionFNO' from 'experiment_stage4' (/home/huawei/.openclaw/workspace/tianyuan-mhf-fno/experiment_stage4.py)"
+    }
+  },
+  "burgers_1d": {
+    "FNO": {
+      "params": 49953,
+      "best_test_loss": 0.0771,
+      "inference_ms": 0.59
+    },
+    "MHF-FNO": {
+      "params": 28337,
+      "best_test_loss": 0.0659,
+      "inference_ms": 0.37
+    },
+    "MHF+CoDA": {
+      "params": 24769,
+      "best_test_loss": 0.19259093701839447,
+      "inference_ms": 0.4523754119873047
+    },
+    "MHF+AFNO": {
+      "params": 24897,
+      "best_test_loss": 0.06917685270309448,
+      "inference_ms": 0.7113933563232422
+    },
+    "MHF+CoDA+AFNO": {
+      "params": 24897,
+      "best_test_loss": 0.06917685270309448,
+      "inference_ms": 0.709986686706543
+    }
+  }
+}

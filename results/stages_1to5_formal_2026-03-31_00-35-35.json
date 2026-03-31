@@ -1,0 +1,144 @@
+{
+  "stage1": {
+    "FNO": {
+      "status": "error",
+      "error": "make_fno_2d() got an unexpected keyword argument 'train_x'"
+    },
+    "TFNO(r=0.5)": {
+      "status": "error",
+      "error": "make_tfno_2d() got an unexpected keyword argument 'train_x'"
+    },
+    "MHF-FNO": {
+      "status": "error",
+      "error": "make_mhf_fno_2d() got an unexpected keyword argument 'train_x'"
+    }
+  },
+  "stage2": {
+    "MHF+CoDA": {
+      "status": "error",
+      "error": "make_mhf_coda_2d() got an unexpected keyword argument 'train_x'"
+    }
+  },
+  "stage3": {
+    "MHF+AFNO": {
+      "status": "error",
+      "error": "make_mhf_afno_2d() got an unexpected keyword argument 'train_x'"
+    }
+  },
+  "stage4": {
+    "MHF+CoDA+AFNO": {
+      "status": "error",
+      "error": "make_mhf_coda_afno_2d() got an unexpected keyword argument 'train_x'"
+    }
+  },
+  "stage5_ns": {
+    "FNO": {
+      "status": "error",
+      "error": "make_fno_2d() got an unexpected keyword argument 'train_x'"
+    },
+    "MHF-FNO": {
+      "status": "error",
+      "error": "make_mhf_fno_2d() got an unexpected keyword argument 'train_x'"
+    },
+    "MHF+CoDA": {
+      "status": "error",
+      "error": "make_mhf_coda_2d() got an unexpected keyword argument 'train_x'"
+    },
+    "MHF+AFNO": {
+      "status": "error",
+      "error": "make_mhf_afno_2d() got an unexpected keyword argument 'train_x'"
+    },
+    "MHF+CoDA+AFNO": {
+      "status": "error",
+      "error": "make_mhf_coda_afno_2d() got an unexpected keyword argument 'train_x'"
+    },
+    "FNO+PINO": {
+      "status": "error",
+      "error": "make_fno_2d() got an unexpected keyword argument 'train_x'"
+    },
+    "MHF-FNO+PINO": {
+      "status": "error",
+      "error": "make_mhf_fno_2d() got an unexpected keyword argument 'train_x'"
+    },
+    "MHF+CoDA+PINO": {
+      "status": "error",
+      "error": "make_mhf_coda_2d() got an unexpected keyword argument 'train_x'"
+    },
+    "MHF+AFNO+PINO": {
+      "status": "error",
+      "error": "make_mhf_afno_2d() got an unexpected keyword argument 'train_x'"
+    },
+    "MHF+CoDA+AFNO+PINO": {
+      "status": "error",
+      "error": "make_mhf_coda_afno_2d() got an unexpected keyword argument 'train_x'"
+    }
+  },
+  "stage5_burgers": {
+    "uniform": {
+      "FNO": {
+        "status": "error",
+        "error": "main.<locals>.<lambda>() got an unexpected keyword argument 'train_x'"
+      },
+      "MHF-FNO": {
+        "status": "error",
+        "error": "main.<locals>.<lambda>() got an unexpected keyword argument 'train_x'"
+      },
+      "MHF+CoDA": {
+        "status": "error",
+        "error": "main.<locals>.<lambda>() got an unexpected keyword argument 'train_x'"
+      },
+      "MHF+AFNO": {
+        "status": "error",
+        "error": "main.<locals>.<lambda>() got an unexpected keyword argument 'train_x'"
+      },
+      "MHF+CoDA+AFNO": {
+        "status": "error",
+        "error": "main.<locals>.<lambda>() got an unexpected keyword argument 'train_x'"
+      }
+    },
+    "rand": {
+      "FNO": {
+        "status": "error",
+        "error": "main.<locals>.<lambda>() got an unexpected keyword argument 'train_x'"
+      },
+      "MHF-FNO": {
+        "status": "error",
+        "error": "main.<locals>.<lambda>() got an unexpected keyword argument 'train_x'"
+      },
+      "MHF+CoDA": {
+        "status": "error",
+        "error": "main.<locals>.<lambda>() got an unexpected keyword argument 'train_x'"
+      },
+      "MHF+AFNO": {
+        "status": "error",
+        "error": "main.<locals>.<lambda>() got an unexpected keyword argument 'train_x'"
+      },
+      "MHF+CoDA+AFNO": {
+        "status": "error",
+        "error": "main.<locals>.<lambda>() got an unexpected keyword argument 'train_x'"
+      }
+    },
+    "conexp": {
+      "FNO": {
+        "status": "error",
+        "error": "main.<locals>.<lambda>() got an unexpected keyword argument 'train_x'"
+      },
+      "MHF-FNO": {
+        "status": "error",
+        "error": "main.<locals>.<lambda>() got an unexpected keyword argument 'train_x'"
+      },
+      "MHF+CoDA": {
+        "status": "error",
+        "error": "main.<locals>.<lambda>() got an unexpected keyword argument 'train_x'"
+      },
+      "MHF+AFNO": {
+        "status": "error",
+        "error": "main.<locals>.<lambda>() got an unexpected keyword argument 'train_x'"
+      },
+      "MHF+CoDA+AFNO": {
+        "status": "error",
+        "error": "main.<locals>.<lambda>() got an unexpected keyword argument 'train_x'"
+      }
+    }
+  }
+}
