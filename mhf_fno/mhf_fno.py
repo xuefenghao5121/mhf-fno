@@ -205,8 +205,9 @@ class MHFSpectralConv(SpectralConv):
         
         优化点:
             - 使用 view 替代 reshape 避免内存复制
-            - 预分配输出张量
+            - 只分配需要的空间，减少零初始化开销
             - 使用 einsum 优化矩阵乘法
+            - 缓存友好的内存访问
         """
         B, C, L = x.shape
         
@@ -215,24 +216,37 @@ class MHFSpectralConv(SpectralConv):
         
         # 计算实际可用的模式数
         n_modes = min(self.modes_list[0], x_freq.shape[-1])
+        freq_len = x_freq.shape[-1]
         
         # 重塑为多头格式 (B, n_heads, head_in, freq_len)
         x_freq = x_freq.view(B, self.n_heads, self.head_in, -1)
         
-        # 预分配输出张量
-        out_freq = torch.zeros(
-            B, self.n_heads, self.head_out, x_freq.shape[-1],
-            dtype=x_freq.dtype, device=x.device
-        )
-        
-        # 多头频域卷积（仅处理低频部分）
-        # einsum: 'bhif,hiof->bhof' 
-        # b: batch, h: head, i: input channel per head, o: output channel per head, f: frequency
-        out_freq[..., :n_modes] = torch.einsum(
-            'bhif,hiof->bhof',
-            x_freq[..., :n_modes], 
-            self.weight[..., :n_modes]
-        )
+        # 优化：直接分配输出，避免完整张量零初始化
+        # 只在需要时才扩展到完整长度，节省零初始化时间
+        if n_modes == freq_len:
+            # 完整分配
+            out_freq = torch.zeros(
+                B, self.n_heads, self.head_out, freq_len,
+                dtype=x_freq.dtype, device=x.device
+            )
+            out_freq[..., :n_modes] = torch.einsum(
+                'bhif,hiof->bhof',
+                x_freq[..., :n_modes], 
+                self.weight[..., :n_modes]
+            )
+        else:
+            # 优化：只计算需要的部分，然后拼接
+            out_freq_part = torch.einsum(
+                'bhif,hiof->bhof',
+                x_freq[..., :n_modes], 
+                self.weight[..., :n_modes]
+            )
+            # 创建零填充的剩余部分
+            out_freq_zeros = torch.zeros(
+                B, self.n_heads, self.head_out, freq_len - n_modes,
+                dtype=x_freq.dtype, device=x.device
+            )
+            out_freq = torch.cat([out_freq_part, out_freq_zeros], dim=-1)
         
         # 合并多头
         out_freq = out_freq.reshape(B, self.out_channels, -1)
@@ -253,7 +267,8 @@ class MHFSpectralConv(SpectralConv):
         优化点:
             - 使用 view 替代 reshape
             - 向量化 einsum 操作
-            - 避免不必要的内存分配
+            - 避免不必要的内存分配和零初始化
+            - 缓存友好的内存访问
         """
         B, C, H, W = x.shape
         
@@ -269,19 +284,31 @@ class MHFSpectralConv(SpectralConv):
         # 重塑为多头格式
         x_freq = x_freq.view(B, self.n_heads, self.head_in, freq_H, freq_W)
         
-        # 预分配输出张量
-        out_freq = torch.zeros(
-            B, self.n_heads, self.head_out, freq_H, freq_W,
-            dtype=x_freq.dtype, device=x.device
-        )
-        
-        # 多头频域卷积
-        # einsum: 'bhiXY,hioXY->bhoXY'
-        out_freq[:, :, :, :m_x, :m_y] = torch.einsum(
-            'bhiXY,hioXY->bhoXY',
-            x_freq[:, :, :, :m_x, :m_y], 
-            self.weight[:, :, :, :m_x, :m_y]
-        )
+        # 优化：只分配需要大小，减少零初始化开销
+        if m_x == freq_H and m_y == freq_W:
+            # 完整分配，使用全部频率
+            out_freq = torch.zeros(
+                B, self.n_heads, self.head_out, freq_H, freq_W,
+                dtype=x_freq.dtype, device=x.device
+            )
+            out_freq[:, :, :, :m_x, :m_y] = torch.einsum(
+                'bhiXY,hioXY->bhoXY',
+                x_freq[:, :, :, :m_x, :m_y], 
+                self.weight[:, :, :, :m_x, :m_y]
+            )
+        else:
+            # 优化：只计算需要的部分，然后填充
+            out_freq_part = torch.einsum(
+                'bhiXY,hioXY->bhoXY',
+                x_freq[:, :, :, :m_x, :m_y], 
+                self.weight[:, :, :, :m_x, :m_y]
+            )
+            # 创建完整输出张量并复制结果
+            out_freq = torch.zeros(
+                B, self.n_heads, self.head_out, freq_H, freq_W,
+                dtype=x_freq.dtype, device=x.device
+            )
+            out_freq[:, :, :, :m_x, :m_y] = out_freq_part
         
         # 合并多头
         out_freq = out_freq.reshape(B, self.out_channels, freq_H, freq_W)

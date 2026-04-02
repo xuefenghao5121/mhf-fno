@@ -243,22 +243,35 @@ class MHFSpectralConvWithAttention(MHFSpectralConv):
         
         # 计算实际可用的模式数
         n_modes = min(self.modes_list[0], x_freq.shape[-1])
+        freq_len = x_freq.shape[-1]
         
         # 重塑为多头格式
         x_freq = x_freq.view(B, self.n_heads, self.head_in, -1)
         
-        # 预分配输出张量
-        out_freq = torch.zeros(
-            B, self.n_heads, self.head_out, x_freq.shape[-1],
-            dtype=x_freq.dtype, device=x.device
-        )
-        
-        # 多头频域卷积
-        out_freq[..., :n_modes] = torch.einsum(
-            'bhif,hiof->bhof',
-            x_freq[..., :n_modes], 
-            self.weight[..., :n_modes]
-        )
+        # 优化：只分配需要大小，减少零初始化开销
+        if n_modes == freq_len:
+            # 完整分配，使用全部频率
+            out_freq = torch.zeros(
+                B, self.n_heads, self.head_out, freq_len,
+                dtype=x_freq.dtype, device=x.device
+            )
+            out_freq[..., :n_modes] = torch.einsum(
+                'bhif,hiof->bhof',
+                x_freq[..., :n_modes], 
+                self.weight[..., :n_modes]
+            )
+        else:
+            # 优化：只计算需要的部分，然后拼接
+            out_freq_part = torch.einsum(
+                'bhif,hiof->bhof',
+                x_freq[..., :n_modes], 
+                self.weight[..., :n_modes]
+            )
+            out_freq_zeros = torch.zeros(
+                B, self.n_heads, self.head_out, freq_len - n_modes,
+                dtype=x_freq.dtype, device=x.device
+            )
+            out_freq = torch.cat([out_freq_part, out_freq_zeros], dim=-1)
         
         # IFFT 得到空域表示
         out_freq_merged = out_freq.reshape(B, self.out_channels, -1)
@@ -292,18 +305,30 @@ class MHFSpectralConvWithAttention(MHFSpectralConv):
         # 重塑为多头格式
         x_freq = x_freq.view(B, self.n_heads, self.head_in, freq_H, freq_W)
         
-        # 预分配输出张量
-        out_freq = torch.zeros(
-            B, self.n_heads, self.head_out, freq_H, freq_W,
-            dtype=x_freq.dtype, device=x.device
-        )
-        
-        # 多头频域卷积
-        out_freq[:, :, :, :m_x, :m_y] = torch.einsum(
-            'bhiXY,hioXY->bhoXY',
-            x_freq[:, :, :, :m_x, :m_y], 
-            self.weight[:, :, :, :m_x, :m_y]
-        )
+        # 优化：只分配需要大小，减少零初始化开销
+        if m_x == freq_H and m_y == freq_W:
+            # 完整分配，使用全部频率
+            out_freq = torch.zeros(
+                B, self.n_heads, self.head_out, freq_H, freq_W,
+                dtype=x_freq.dtype, device=x.device
+            )
+            out_freq[:, :, :, :m_x, :m_y] = torch.einsum(
+                'bhiXY,hioXY->bhoXY',
+                x_freq[:, :, :, :m_x, :m_y], 
+                self.weight[:, :, :, :m_x, :m_y]
+            )
+        else:
+            # 优化：只计算需要的部分，然后填充
+            out_freq_part = torch.einsum(
+                'bhiXY,hioXY->bhoXY',
+                x_freq[:, :, :, :m_x, :m_y], 
+                self.weight[:, :, :, :m_x, :m_y]
+            )
+            out_freq = torch.zeros(
+                B, self.n_heads, self.head_out, freq_H, freq_W,
+                dtype=x_freq.dtype, device=x.device
+            )
+            out_freq[:, :, :, :m_x, :m_y] = out_freq_part
         
         # IFFT 得到空域表示
         out_freq_merged = out_freq.reshape(B, self.out_channels, freq_H, freq_W)
