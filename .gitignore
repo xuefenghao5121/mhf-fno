@@ -113,3 +113,8 @@ workspace_status_summary.md
 !CHANGELOG.md
 !LICENSE
 !MHF-FNO_CrossHead_Attention_PDE_Solving.pdf
+
+# Model weights
+*.pth
+*.pt
+*.ckpt
