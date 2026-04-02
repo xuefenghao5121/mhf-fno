@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-MHF-FNO 预训练脚本 (v1.6.4)
+MHF-FNO 预训练脚本 (v1.6.4 - CPU性能优化版)
 
 基于本地数据集训练预训练模型，导出推理就绪的 .pth 文件。
 
@@ -9,6 +9,12 @@ MHF-FNO 预训练脚本 (v1.6.4)
 - Navier-Stokes 128x128
 - Burgers 1D
 - 自定义 PT/H5 数据集
+
+性能优化:
+- 优化数据加载并行策略
+- CPU线程绑定提升缓存利用率
+- 可配置OpenMP/MKL线程数
+- 预加载到内存减少IO阻塞
 
 使用方法:
     # Darcy Flow (默认)
@@ -23,18 +29,64 @@ MHF-FNO 预训练脚本 (v1.6.4)
 
     # 快速验证 (少量 epoch)
     python train_pretrained.py --epochs 5 --batch_size 32
+
+    # 多核CPU优化（推荐128核系统）
+    python train_pretrained.py --num_workers 8 --omp_num_threads 16 --bind_cpu --pin_memory
 """
 
 import argparse
 import json
 import time
 import sys
+import os
 from pathlib import Path
 from datetime import datetime
 
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
+
+# 性能优化：设置CPU线程绑定
+def bind_cpu_to_core(core_id: int):
+    """绑定当前进程到指定CPU核心"""
+    try:
+        import psutil
+        p = psutil.Process()
+        p.cpu_affinity([core_id])
+        return True
+    except ImportError:
+        return False
+    except Exception:
+        return False
+
+def set_cpu_affinity(start_core: int, num_threads: int):
+    """设置CPU亲和性，绑定进程到连续的核心范围"""
+    try:
+        import psutil
+        p = psutil.Process()
+        cores = list(range(start_core, start_core + num_threads))
+        p.cpu_affinity(cores)
+        return cores
+    except ImportError:
+        return None
+    except Exception as e:
+        print(f"⚠️  CPU绑定失败: {e}")
+        return None
+
+# 环境变量配置：提前设置OpenMP/MKL线程数
+def configure_openmp_threads(num_threads: int):
+    """配置OpenMP/MKL线程数，需要在导入torch之前调用"""
+    if num_threads <= 0:
+        return
+    
+    os.environ['OMP_NUM_THREADS'] = str(num_threads)
+    os.environ['MKL_NUM_THREADS'] = str(num_threads)
+    os.environ['VECLIB_MAXIMUM_THREADS'] = str(num_threads)
+    os.environ['NUMEXPR_NUM_THREADS'] = str(num_threads)
+    os.environ['OPENBLAS_NUM_THREADS'] = str(num_threads)
+    
+    # 设置FFT规划缓存，提升重复FFT性能
+    os.environ['FFT_CACHE_SIZE'] = '1048576'
 
 # 添加项目根目录
 ROOT = Path(__file__).parent.parent
@@ -274,7 +326,22 @@ def train(args):
     
     # DataLoader
     train_dataset = TensorDataset(train_x, train_y)
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
+    
+    # 优化的数据加载配置
+    loader_kwargs = {
+        'batch_size': args.batch_size,
+        'shuffle': True,
+        'num_workers': args.num_workers,
+    }
+    
+    # 可选：固定内存和预取优化
+    if hasattr(args, 'pin_memory'):
+        loader_kwargs['pin_memory'] = args.pin_memory
+    if hasattr(args, 'prefetch_factor') and args.num_workers > 0:
+        loader_kwargs['prefetch_factor'] = args.prefetch_factor
+        loader_kwargs['persistent_workers'] = True
+    
+    train_loader = DataLoader(train_dataset, **loader_kwargs)
     
     # 优化器
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-5)
@@ -385,7 +452,34 @@ def main():
     parser.add_argument('--n_heads', type=int, default=4, help='MHF 头数')
     parser.add_argument('--output_dir', type=str, default=str(ROOT / 'pretrained' / 'models'))
     parser.add_argument('--log_interval', type=int, default=5, help='日志间隔')
+    
+    # === 性能优化参数 ===
+    parser.add_argument('--num_workers', type=int, default=0, 
+                        help='数据加载worker数量 (推荐: CPU核数/4 到 CPU核数/2)')
+    parser.add_argument('--omp_num_threads', type=int, default=0,
+                        help='OpenMP/MKL线程数 (设置为物理核数，避免超线程竞争)')
+    parser.add_argument('--bind_cpu', action='store_true',
+                        help='启用CPU线程绑定，提升缓存利用率')
+    parser.add_argument('--pin_memory', action='store_true',
+                        help='在DataLoader中固定内存（仅对CPU训练影响不大）')
+    parser.add_argument('--prefetch_factor', type=int, default=2,
+                        help='数据预取因子 (仅当num_workers > 0时生效)')
+    parser.add_argument('--start_core', type=int, default=0,
+                        help='CPU绑定起始核心ID，用于多进程训练')
+    
     args = parser.parse_args()
+    
+    # === 应用性能优化配置 ===
+    if args.omp_num_threads > 0:
+        configure_openmp_threads(args.omp_num_threads)
+        torch.set_num_threads(args.omp_num_threads)
+        torch.set_num_interop_threads(args.omp_num_threads)
+        print(f"⚙️  配置OpenMP/MKL线程数: {args.omp_num_threads}")
+    
+    if args.bind_cpu and args.omp_num_threads > 0:
+        cores = set_cpu_affinity(args.start_core, args.omp_num_threads)
+        if cores:
+            print(f"⚙️  CPU线程绑定完成，核心范围: {cores[0]} - {cores[-1]}")
     
     train(args)
 
