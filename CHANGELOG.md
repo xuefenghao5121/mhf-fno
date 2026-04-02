@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.5] - 2026-04-02
+
+### 🚀 Performance Optimizations
+- **Memory Allocation Optimization**: Optimized memory allocation strategy and added performance tuning parameters
+- **MPI Parallel Training Support**: Added parallel training script `pretrained/run_parallel_train.py` for distributed training
+- **Pretrained Model Support**: Added complete pretrained model training and inference code (`pretrained/train_pretrained.py`)
+- **Documentation**: Added comprehensive performance optimization documentation `PERFORMANCE_OPTIMIZATION.md`
+
+### 📈 Performance Improvements
+- Reduced memory footprint with optimized allocation strategy
+- Enabled multi-GPU parallel training for faster experimentation
+- Improved inference throughput with memory optimizations
+
+### 📁 Files Changed
+- `mhf_fno/mhf_attention.py` - Attention mechanism memory optimizations
+- `mhf_fno/mhf_fno.py` - Core model performance optimizations
+- `pretrained/PERFORMANCE_OPTIMIZATION.md` (new) - Performance optimization guide
+- `pretrained/run_parallel_train.py` (new) - MPI parallel training script
+- `pretrained/train_pretrained.py` - Pretrained training improvements
+
+---
+
 ## [1.6.4] - 2026-03-29
 
 ### 🔧 Refactoring
@@ -533,6 +555,8 @@ python run_benchmarks.py \
 
 | Version | Date | Key Features | Notes |
 |---------|------|--------------|-------|
+| **1.6.5** | **2026-04-02** | **Performance Optimizations + MPI Parallel Training** | Memory optimizations + distributed training ✨ |
+| **1.6.4** | **2026-03-29** | **Benchmark Directory Restructure** | Code quality and repository hygiene |
 | **1.6.3** | **2026-03-29** | **Multi-resolution + Auto Config + Analysis** | v1.6.3 Release ✨ |
 | **1.6.2** | **2026-03-28** | **Critical: Real PDE Solver for Darcy** | 95%+ match to real data ✅ |
 | **1.6.1** | **2026-03-27** | **Custom Dataset Support** | H5/PT file loading ✨ |
